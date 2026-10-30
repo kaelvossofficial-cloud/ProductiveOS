@@ -51,8 +51,11 @@ interface MicroOsDao {
     @Query("DELETE FROM clips WHERE timestamp < :cutoffTimestamp")
     suspend fun deleteClipsOlderThan(cutoffTimestamp: Long)
 
-    @Query("DELETE FROM clips WHERE id NOT IN (SELECT id FROM clips ORDER BY timestamp DESC LIMIT 50)")
-    suspend fun trimClipsToMax50()
+    @Query("SELECT id FROM clips ORDER BY timestamp DESC LIMIT 50")
+    suspend fun getTop50ClipIds(): List<Long>
+
+    @Query("DELETE FROM clips WHERE id NOT IN (:keepIds)")
+    suspend fun deleteClipsExcept(keepIds: List<Long>)
 
     @Query("DELETE FROM clips WHERE id = :id")
     suspend fun deleteClipById(id: Long)

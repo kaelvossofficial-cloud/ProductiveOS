@@ -43,12 +43,13 @@ class FocusAudioGenerator @Inject constructor() {
         _activeMode.value = mode
 
         audioJob = scope.launch {
-            val sampleRate = 22050
-            val bufferSize = AudioTrack.getMinBufferSize(
+            val sampleRate = 44100
+            val minBuf = AudioTrack.getMinBufferSize(
                 sampleRate,
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
-            ).coerceAtLeast(4096)
+            )
+            val bufferSize = if (minBuf > 0) minBuf.coerceAtLeast(8192) else 8192
 
             val track = runCatching {
                 AudioTrack.Builder()

@@ -15,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -112,7 +113,14 @@ class MainActivity : ComponentActivity() {
             addAction(Intent.ACTION_PACKAGE_REPLACED)
             addDataScheme("package")
         }
-        registerReceiver(dynamicPackageReceiver, pkgFilter)
+        runCatching {
+            ContextCompat.registerReceiver(
+                this,
+                dynamicPackageReceiver,
+                pkgFilter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+        }
 
         setContent {
             val context = LocalContext.current

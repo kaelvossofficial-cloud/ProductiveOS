@@ -93,7 +93,10 @@ class MicroOsRepository @Inject constructor(
                         microOsDao.deleteDuplicateClip(text)
                         microOsDao.insertClip(ClipEntity(content = text, timestamp = now))
                         microOsDao.deleteClipsOlderThan(sevenDaysAgo)
-                        microOsDao.trimClipsToMax50()
+                        val keepIds = microOsDao.getTop50ClipIds()
+                        if (keepIds.isNotEmpty()) {
+                            microOsDao.deleteClipsExcept(keepIds)
+                        }
                     }
                 }
             }

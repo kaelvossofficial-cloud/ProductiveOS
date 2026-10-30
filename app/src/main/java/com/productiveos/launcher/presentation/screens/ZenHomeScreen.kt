@@ -298,67 +298,62 @@ fun ZenHomeScreen(
                 horizontalAlignment = horizontalAlignment
             ) {
                 if (pinnedApps.isEmpty()) {
-                    Text(
-                        text = "no pinned apps · swipe up to pin essentials",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = palette.mutedText,
-                        textAlign = textAlign,
-                        modifier = Modifier.clickable(onClick = onSwipeUpSearch)
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(palette.surface)
+                            .border(1.dp, palette.borderSubtle, RoundedCornerShape(16.dp))
+                            .clickable(onClick = onSwipeUpSearch)
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "productiveos · zen space",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = palette.primaryText
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "swipe up or tap here to open apps & pin essentials",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = palette.secondaryText,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 } else {
                     pinnedApps.take(6).forEach { app ->
-                        var rowDragX by remember(app.packageName) { mutableFloatStateOf(0f) }
-
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .pointerInput(app.packageName) {
-                                    detectHorizontalDragGestures(
-                                        onDragStart = { rowDragX = 0f },
-                                        onDragEnd = {
-                                            if (rowDragX > 80f) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                onAppSwipeRight(app)
-                                            }
-                                            rowDragX = 0f
-                                        },
-                                        onHorizontalDrag = { _, dragAmount ->
-                                            rowDragX += dragAmount
-                                        }
-                                    )
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .tactilePress(
-                                        minTouchHeight = true,
-                                        enableGlow = true,
-                                        onClick = { onAppClick(app) },
-                                        onLongClick = { onAppLongClick(app) }
-                                    ),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = when (settings.textAlignment) {
-                                    TextAlignmentOption.LEFT -> Arrangement.Start
-                                    TextAlignmentOption.CENTER -> Arrangement.Center
-                                    TextAlignmentOption.RIGHT -> Arrangement.End
-                                }
-                            ) {
-                                Text(
-                                    text = app.displayName.lowercase(),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = palette.primaryText,
-                                    textAlign = textAlign
+                                .tactilePress(
+                                    minTouchHeight = true,
+                                    enableGlow = true,
+                                    onClick = { onAppClick(app) },
+                                    onLongClick = { onAppLongClick(app) }
                                 )
-                                if (app.isFrictionEnabled) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(5.dp)
-                                            .clip(CircleShape)
-                                            .background(palette.mutedText)
-                                    )
-                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = when (settings.textAlignment) {
+                                TextAlignmentOption.LEFT -> Arrangement.Start
+                                TextAlignmentOption.CENTER -> Arrangement.Center
+                                TextAlignmentOption.RIGHT -> Arrangement.End
+                            }
+                        ) {
+                            Text(
+                                text = app.displayName.lowercase(),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = palette.primaryText,
+                                textAlign = textAlign
+                            )
+                            if (app.isFrictionEnabled) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(5.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.mutedText)
+                                )
                             }
                         }
                     }

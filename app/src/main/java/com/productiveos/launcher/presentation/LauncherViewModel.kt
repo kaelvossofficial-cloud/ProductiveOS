@@ -187,18 +187,30 @@ class LauncherViewModel @Inject constructor(
     )
 
     init {
-        microOsRepository.startClipboardVaultListener()
+        runCatching { microOsRepository.startClipboardVaultListener() }
         refreshAllState()
     }
 
     fun refreshAllState() {
         viewModelScope.launch {
-            _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
-            preferencesRepository.purgeExpiredBurnerNoteIfNeeded()
-            microOsRepository.captureCurrentPrimaryClip()
-            appRepository.syncInstalledApps()
-            _dailyTelemetry.value = usageStatsHelper.queryTodayTelemetry()
-            whisperEngine.refreshWhisper()
+            runCatching {
+                _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
+            }
+            runCatching {
+                preferencesRepository.purgeExpiredBurnerNoteIfNeeded()
+            }
+            runCatching {
+                microOsRepository.captureCurrentPrimaryClip()
+            }
+            runCatching {
+                appRepository.syncInstalledApps()
+            }
+            runCatching {
+                _dailyTelemetry.value = usageStatsHelper.queryTodayTelemetry()
+            }
+            runCatching {
+                whisperEngine.refreshWhisper()
+            }
         }
     }
 

@@ -30,44 +30,48 @@ class AppRepository @Inject constructor(
     val hiddenAppsFlow: Flow<List<AppEntity>> = appDao.observeHiddenApps()
 
     suspend fun syncInstalledApps() = withContext(Dispatchers.IO) {
-        val installedList = querySystemLaunchableApps()
-        if (installedList.isEmpty()) return@withContext
+        runCatching {
+            val installedList = querySystemLaunchableApps()
+            if (installedList.isEmpty()) return@withContext
 
-        val existingByPkg = appDao.getAllAppsSnapshot().associateBy { it.packageName }
-        val prefs = preferencesRepository.settingsFlow.first()
+            val existingByPkg = runCatching {
+                appDao.getAllAppsSnapshot().associateBy { it.packageName }
+            }.getOrDefault(emptyMap())
 
-        val defaultPinnedMap = if (!prefs.hasInitializedDefaults) {
-            resolveDefaultEssentialPackages(installedList)
-        } else {
-            emptyMap()
-        }
+            val prefs = runCatching { preferencesRepository.settingsFlow.first() }
+                .getOrDefault(LauncherSettings())
 
-        val mergedEntities = installedList.map { (pkg, systemLabel) ->
-            val existing = existingByPkg[pkg]
-            if (existing != null) {
-                existing.copy(label = systemLabel)
+            val defaultPinnedMap = if (!prefs.hasInitializedDefaults || existingByPkg.none { it.value.isPinned }) {
+                resolveDefaultEssentialPackages(installedList)
             } else {
-                val defaultSlot = defaultPinnedMap[pkg]
-                AppEntity(
-                    packageName = pkg,
-                    label = systemLabel,
-                    customLabel = defaultSlot?.customLabel,
-                    isPinned = defaultSlot != null,
-                    pinOrder = defaultSlot?.order ?: 999,
-                    isHidden = false,
-                    isFrictionEnabled = isDefaultFrictionPackage(pkg, systemLabel),
-                    launchCount = 0,
-                    lastUsedTime = 0L
-                )
+                emptyMap()
             }
-        }
 
-        appDao.upsertAll(mergedEntities)
-        appDao.deleteRemovedApps(installedList.map { it.first })
+            val mergedEntities = installedList.map { (pkg, systemLabel) ->
+                val existing = existingByPkg[pkg]
+                if (existing != null) {
+                    existing.copy(label = systemLabel)
+                } else {
+                    val defaultSlot = defaultPinnedMap[pkg]
+                    AppEntity(
+                        packageName = pkg,
+                        label = systemLabel,
+                        customLabel = defaultSlot?.customLabel,
+                        isPinned = defaultSlot != null,
+                        pinOrder = defaultSlot?.order ?: 999,
+                        isHidden = false,
+                        isFrictionEnabled = isDefaultFrictionPackage(pkg, systemLabel),
+                        launchCount = 0,
+                        lastUsedTime = 0L
+                    )
+                }
+            }
 
-        if (!prefs.hasInitializedDefaults && mergedEntities.isNotEmpty()) {
+            appDao.upsertAll(mergedEntities)
+            runCatching { appDao.deleteRemovedApps(installedList.map { it.first }) }
+
             val anyPinned = mergedEntities.any { it.isPinned }
-            if (!anyPinned) {
+            if (!anyPinned && mergedEntities.isNotEmpty()) {
                 val fallbackTop5 = mergedEntities
                     .sortedBy { it.label.lowercase() }
                     .take(5)
@@ -76,7 +80,7 @@ class AppRepository @Inject constructor(
                     }
                 appDao.upsertAll(fallbackTop5)
             }
-            preferencesRepository.markDefaultsInitialized()
+            runCatching { preferencesRepository.markDefaultsInitialized() }
         }
     }
 

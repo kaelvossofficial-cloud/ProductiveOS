@@ -25,7 +25,10 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "productive_os.db"
-        ).fallbackToDestructiveMigration().build()
+        )
+            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigrationOnDowngrade()
+            .build()
     }
 
     @Provides

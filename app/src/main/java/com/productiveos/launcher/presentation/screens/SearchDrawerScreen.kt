@@ -271,11 +271,25 @@ fun SearchDrawerScreen(
             )
 
             // App Directory with Right-Edge Alphabet Wave Scrubber
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
+            if (filteredApps.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (query.isEmpty()) "loading apps..." else "no matching apps found",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = palette.mutedText
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -401,6 +415,7 @@ fun SearchDrawerScreen(
                         }
                     }
                 }
+            }
             }
 
             if (settings.bottomDockedSearch) {
