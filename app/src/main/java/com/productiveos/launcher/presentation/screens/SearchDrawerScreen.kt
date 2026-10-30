@@ -80,6 +80,7 @@ fun SearchDrawerScreen(
     onAppClick: (AppEntity) -> Unit,
     onAppLongClick: (AppEntity) -> Unit,
     onOmniClick: (OmniSearchResult) -> Unit,
+    onBrowserEngineSearch: (query: String, engine: String) -> Unit = { _, _ -> },
     onCloseDrawer: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
@@ -151,12 +152,14 @@ fun SearchDrawerScreen(
                     cursorBrush = SolidColor(palette.primaryText),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Go
+                        imeAction = ImeAction.Search
                     ),
                     keyboardActions = KeyboardActions(
-                        onGo = {
+                        onSearch = {
                             if (omniResult != null) {
                                 onOmniClick(omniResult)
+                            } else if (query.isNotBlank()) {
+                                onBrowserEngineSearch(query.trim(), "google")
                             } else if (filteredApps.isNotEmpty()) {
                                 onAppClick(filteredApps.first())
                             }
@@ -201,6 +204,48 @@ fun SearchDrawerScreen(
             if (!settings.bottomDockedSearch) {
                 searchBarContent()
                 Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Browser Search Recommendations (Google, YouTube, Wikipedia, DuckDuckGo)
+            AnimatedVisibility(
+                visible = query.isNotBlank(),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp, end = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val searchEngines = listOf(
+                        "google" to "Google",
+                        "youtube" to "YouTube",
+                        "wikipedia" to "Wiki",
+                        "duckduckgo" to "DuckDuckGo"
+                    )
+                    searchEngines.forEach { (engineKey, engineLabel) ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(palette.surfaceElevated)
+                                .border(1.dp, palette.borderSubtle, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onBrowserEngineSearch(query.trim(), engineKey)
+                                }
+                                .padding(vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = engineLabel,
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                                color = palette.primaryText
+                            )
+                        }
+                    }
+                }
             }
 
             // Omni-Search Math & Bang Command Pill

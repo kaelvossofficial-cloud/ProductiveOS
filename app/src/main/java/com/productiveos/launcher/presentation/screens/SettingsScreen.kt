@@ -83,7 +83,10 @@ fun SettingsScreen(
     onUnpinApp: (AppEntity) -> Unit,
     onUnhideApp: (AppEntity) -> Unit,
     onLaunchHiddenApp: (AppEntity) -> Unit,
-    onUpdateVaultPasscode: (String) -> Unit
+    onUpdateVaultPasscode: (String) -> Unit,
+    onHoldToOpenChanged: (Boolean) -> Unit = {},
+    onHoldSecondsChanged: (Int) -> Unit = {},
+    onRequestNotificationAccess: () -> Unit = {}
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
@@ -292,6 +295,42 @@ fun SettingsScreen(
                         selected = settings.frictionSeconds == seconds,
                         modifier = Modifier.weight(1f),
                         onClick = { onFrictionSecondsChanged(seconds) }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Intentional 3-Second Hold-to-Open Gate (Impulse & Mis-touch Protection)
+        SectionHeader(title = "intentional hold-to-open gate")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleSettingRow(
+            title = "require hold to open apps",
+            subtitle = "prevents accidental pocket touches & impulsive twitch-opening of apps",
+            checked = settings.enableHoldToOpen,
+            onCheckedChange = onHoldToOpenChanged
+        )
+
+        if (settings.enableHoldToOpen) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "hold duration",
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette.primaryText
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(1, 2, 3).forEach { seconds ->
+                    OptionChip(
+                        label = "${seconds}s hold",
+                        selected = settings.holdToOpenSeconds == seconds,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onHoldSecondsChanged(seconds) }
                     )
                 }
             }

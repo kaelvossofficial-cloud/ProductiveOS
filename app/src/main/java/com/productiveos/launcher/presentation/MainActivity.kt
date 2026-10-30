@@ -1,5 +1,7 @@
 package com.productiveos.launcher.presentation
 
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -30,11 +32,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,14 +51,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.productiveos.launcher.data.preferences.LauncherThemeOption
 import com.productiveos.launcher.data.repository.WhisperItem
+import com.productiveos.launcher.data.service.ProductiveNotificationListenerService
 import com.productiveos.launcher.presentation.components.AppActionBottomSheet
 import com.productiveos.launcher.presentation.components.BurnerNoteOverlay
 import com.productiveos.launcher.presentation.components.MicroLogJournalSheet
 import com.productiveos.launcher.presentation.components.QuantumClipSheet
 import com.productiveos.launcher.presentation.components.SwapPinnedAppBottomSheet
 import com.productiveos.launcher.presentation.screens.MindfulFrictionOverlay
+import com.productiveos.launcher.presentation.screens.ReportsDashboardScreen
 import com.productiveos.launcher.presentation.screens.SearchDrawerScreen
 import com.productiveos.launcher.presentation.screens.SettingsScreen
+import com.productiveos.launcher.presentation.screens.WidgetGalleryScreen
 import com.productiveos.launcher.presentation.screens.ZenHomeScreen
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.ProductiveOSTheme
@@ -60,11 +69,15 @@ import com.productiveos.launcher.util.OmniSearchResult
 import com.productiveos.launcher.util.SystemLauncherHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: LauncherViewModel by viewModels()
+    private lateinit var appWidgetManager: AppWidgetManager
+    private lateinit var appWidgetHost: AppWidgetHost
+    private var backPressPagerHandler: (() -> Boolean)? = null
 
     private val dynamicPackageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -72,8 +85,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        runCatching { appWidgetHost.startListening() }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        runCatching { appWidgetHost.stopListening() }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        appWidgetManager = AppWidgetManager.getInstance(this)
+        appWidgetHost = AppWidgetHost(this, 1024)
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.Transparent.toArgb()),
@@ -100,6 +126,9 @@ class MainActivity : ComponentActivity() {
                         }
                         viewModel.currentScreen.value != LauncherScreen.ZEN_HOME -> {
                             viewModel.returnToHome()
+                        }
+                        backPressPagerHandler?.invoke() == true -> {
+                            // Handled return to center home page
                         }
                     }
                 }
@@ -148,10 +177,42 @@ class MainActivity : ComponentActivity() {
             val quantumClipFilter by viewModel.quantumClipFilter.collectAsStateWithLifecycle()
             val isMicroLogOpen by viewModel.isMicroLogOpen.collectAsStateWithLifecycle()
             val isBurnerNoteOpen by viewModel.isBurnerNoteOpen.collectAsStateWithLifecycle()
+            val usageReportData by viewModel.usageReportData.collectAsStateWithLifecycle()
+            val reportPeriod by viewModel.reportPeriod.collectAsStateWithLifecycle()
+            val pomodoroState by viewModel.pomodoroState.collectAsStateWithLifecycle()
+            val importantNotifications by viewModel.importantNotifications.collectAsStateWithLifecycle()
+
+            val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
+            val coroutineScope = rememberCoroutineScope()
+
+            DisposableEffect(pagerState.currentPage) {
+                backPressPagerHandler = {
+                    if (pagerState.currentPage != 1) {
+                        coroutineScope.launch { pagerState.animateScrollToPage(1) }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                onDispose {
+                    backPressPagerHandler = null
+                }
+            }
+
+            val widgetPickLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
+                    if (widgetId != -1) {
+                        viewModel.addInstalledAppWidgetId(widgetId)
+                    }
+                }
+            }
 
             // BLOCK 1, ITEM 1: System Bar Contrast & Stealth Mode Fix
             LaunchedEffect(effectiveTheme, settings.statusBarStealth) {
-                val isLight = effectiveTheme == LauncherThemeOption.WARM_STONE
+                val isLight = effectiveTheme.isLight
                 SystemLauncherHelper.applySystemBarContrast(window, isLight)
                 SystemLauncherHelper.applyStatusBarVisibility(window, settings.statusBarStealth)
             }
@@ -212,168 +273,214 @@ class MainActivity : ComponentActivity() {
                     ) { screen ->
                         when (screen) {
                             LauncherScreen.ZEN_HOME -> {
-                                ZenHomeScreen(
-                                    pinnedApps = pinnedApps,
-                                    telemetry = telemetry,
-                                    whisperItem = whisperItem,
-                                    activeFocusSound = activeFocusSound,
-                                    settings = settings,
-                                    isDefaultLauncher = isDefaultLauncher,
-                                    onSetDefaultLauncherClick = requestDefaultHome,
-                                    onClockClick = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        SystemLauncherHelper.openClockApp(context)
-                                    },
-                                    onDateClick = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        SystemLauncherHelper.openCalendarApp(context)
-                                    },
-                                    onTelemetryPillClick = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        if (!telemetry.hasPermission) {
-                                            SystemLauncherHelper.openUsageAccessSettings(context)
-                                        } else {
-                                            viewModel.refreshAllState()
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize()
+                                ) { page ->
+                                    when (page) {
+                                        0 -> {
+                                            // Swipe Right from Home reveals Mindful Reports Dashboard
+                                            ReportsDashboardScreen(
+                                                reportData = usageReportData,
+                                                selectedPeriod = reportPeriod,
+                                                onPeriodSelected = { viewModel.setReportPeriod(it) },
+                                                onRequestUsagePermission = {
+                                                    SystemLauncherHelper.openUsageAccessSettings(context)
+                                                },
+                                                onAppClick = { pkg ->
+                                                    SystemLauncherHelper.performGlowAppOpenHaptic(context)
+                                                    SystemLauncherHelper.launchPackage(context, pkg)
+                                                },
+                                                onBackToHome = {
+                                                    coroutineScope.launch { pagerState.animateScrollToPage(1) }
+                                                }
+                                            )
                                         }
-                                    },
-                                    onWhisperClick = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        when (whisperItem) {
-                                            is WhisperItem.MediaNowPlaying -> {
-                                                SystemLauncherHelper.toggleMediaPlayback(context)
-                                            }
-                                            is WhisperItem.CalendarEvent -> {
-                                                SystemLauncherHelper.openCalendarApp(context)
-                                            }
-                                            is WhisperItem.BatteryStatus -> {
-                                                runCatching {
-                                                    context.startActivity(
-                                                        Intent(Intent.ACTION_POWER_USAGE_SUMMARY).apply {
-                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        1 -> {
+                                            // Center Home Canvas
+                                            ZenHomeScreen(
+                                                pinnedApps = pinnedApps,
+                                                telemetry = telemetry,
+                                                whisperItem = whisperItem,
+                                                activeFocusSound = activeFocusSound,
+                                                settings = settings,
+                                                isDefaultLauncher = isDefaultLauncher,
+                                                onSetDefaultLauncherClick = requestDefaultHome,
+                                                onClockClick = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    SystemLauncherHelper.openClockApp(context)
+                                                },
+                                                onDateClick = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    SystemLauncherHelper.openCalendarApp(context)
+                                                },
+                                                onTelemetryPillClick = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    if (!telemetry.hasPermission) {
+                                                        SystemLauncherHelper.openUsageAccessSettings(context)
+                                                    } else {
+                                                        viewModel.refreshAllState()
+                                                    }
+                                                },
+                                                onWhisperClick = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    when (whisperItem) {
+                                                        is WhisperItem.MediaNowPlaying -> {
+                                                            SystemLauncherHelper.toggleMediaPlayback(context)
                                                         }
-                                                    )
-                                                }.onFailure { viewModel.nextWhisper() }
-                                            }
-                                            else -> {
-                                                viewModel.nextWhisper()
-                                            }
-                                        }
-                                    },
-                                    onToggleFocusSound = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.triggerFocusSound(null)
-                                    },
-                                    onOpenBurnerNote = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.openBurnerNote()
-                                    },
-                                    onOpenQuantumClip = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.openQuantumClipVault()
-                                    },
-                                    onAppClick = { app ->
-                                        SystemLauncherHelper.performGlowAppOpenHaptic(context)
-                                        viewModel.onAppRequested(app) { pkg ->
-                                            SystemLauncherHelper.launchPackage(context, pkg)
-                                        }
-                                    },
-                                    onAppLongClick = { app ->
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.openAppContextSheet(app)
-                                    },
-                                    onAppSwipeRight = { app ->
-                                        // BLOCK 1, ITEM 5: Swipe-Right launch secondary app
-                                        val targetPkg = app.swipeActionPackage
-                                        if (targetPkg != null) {
-                                            SystemLauncherHelper.performGlowAppOpenHaptic(context)
-                                            SystemLauncherHelper.launchPackage(context, targetPkg)
-                                        } else {
-                                            // Smart contextual fallback based on slot
-                                            when {
-                                                app.displayName.contains("message", ignoreCase = true) ||
-                                                    app.label.contains("message", ignoreCase = true) -> {
-                                                    runCatching {
-                                                        context.startActivity(
-                                                            Intent(Intent.ACTION_DIAL).apply {
-                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        is WhisperItem.CalendarEvent -> {
+                                                            SystemLauncherHelper.openCalendarApp(context)
+                                                        }
+                                                        is WhisperItem.BatteryStatus -> {
+                                                            runCatching {
+                                                                context.startActivity(
+                                                                    Intent(Intent.ACTION_POWER_USAGE_SUMMARY).apply {
+                                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                    }
+                                                                )
+                                                            }.onFailure { viewModel.nextWhisper() }
+                                                        }
+                                                        else -> {
+                                                            viewModel.nextWhisper()
+                                                        }
+                                                    }
+                                                },
+                                                onToggleFocusSound = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.triggerFocusSound(null)
+                                                },
+                                                onOpenBurnerNote = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.openBurnerNote()
+                                                },
+                                                onOpenQuantumClip = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.openQuantumClipVault()
+                                                },
+                                                onAppClick = { app ->
+                                                    SystemLauncherHelper.performGlowAppOpenHaptic(context)
+                                                    viewModel.onAppRequested(app) { pkg ->
+                                                        SystemLauncherHelper.launchPackage(context, pkg)
+                                                    }
+                                                },
+                                                onAppLongClick = { app ->
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.openAppContextSheet(app)
+                                                },
+                                                onAppSwipeRight = { app ->
+                                                    val targetPkg = app.swipeActionPackage
+                                                    if (targetPkg != null) {
+                                                        SystemLauncherHelper.performGlowAppOpenHaptic(context)
+                                                        SystemLauncherHelper.launchPackage(context, targetPkg)
+                                                    } else {
+                                                        when {
+                                                            app.displayName.contains("message", ignoreCase = true) ||
+                                                                app.label.contains("message", ignoreCase = true) -> {
+                                                                runCatching {
+                                                                    context.startActivity(
+                                                                        Intent(Intent.ACTION_DIAL).apply {
+                                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                        }
+                                                                    )
+                                                                }
                                                             }
-                                                        )
-                                                    }
-                                                }
-                                                app.displayName.contains("phone", ignoreCase = true) ||
-                                                    app.label.contains("phone", ignoreCase = true) -> {
-                                                    runCatching {
-                                                        context.startActivity(
-                                                            Intent(Intent.ACTION_MAIN).apply {
-                                                                addCategory(Intent.CATEGORY_APP_MESSAGING)
-                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            app.displayName.contains("phone", ignoreCase = true) ||
+                                                                app.label.contains("phone", ignoreCase = true) -> {
+                                                                runCatching {
+                                                                    context.startActivity(
+                                                                        Intent(Intent.ACTION_MAIN).apply {
+                                                                            addCategory(Intent.CATEGORY_APP_MESSAGING)
+                                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                        }
+                                                                    )
+                                                                }
                                                             }
-                                                        )
-                                                    }
-                                                }
-                                                app.displayName.contains("camera", ignoreCase = true) ||
-                                                    app.label.contains("camera", ignoreCase = true) -> {
-                                                    runCatching {
-                                                        context.startActivity(
-                                                            Intent(Intent.ACTION_VIEW).apply {
-                                                                type = "image/*"
-                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            app.displayName.contains("camera", ignoreCase = true) ||
+                                                                app.label.contains("camera", ignoreCase = true) -> {
+                                                                runCatching {
+                                                                    context.startActivity(
+                                                                        Intent(Intent.ACTION_VIEW).apply {
+                                                                            type = "image/*"
+                                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                        }
+                                                                    )
+                                                                }
                                                             }
-                                                        )
+                                                            else -> {
+                                                                SystemLauncherHelper.openAppInfo(context, app.packageName)
+                                                            }
+                                                        }
                                                     }
+                                                },
+                                                onSwipeUpSearch = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.openSearchDrawer()
+                                                },
+                                                onSwipeDownNotifications = {
+                                                    SystemLauncherHelper.expandNotificationShade(context)
+                                                },
+                                                onCanvasSwipeLeft = {
+                                                    coroutineScope.launch { pagerState.animateScrollToPage(2) }
+                                                },
+                                                onCanvasSwipeRight = {
+                                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                                },
+                                                onDoubleTapEmptySpace = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.toggleContrastThemeOnDoubleTap()
+                                                },
+                                                onLongPressEmptySpace = {
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.openSettingsScreen()
                                                 }
-                                                else -> {
-                                                    SystemLauncherHelper.openAppInfo(context, app.packageName)
+                                            )
+                                        }
+                                        2 -> {
+                                            // Swipe Left from Home reveals Widget Gallery
+                                            WidgetGalleryScreen(
+                                                telemetry = telemetry,
+                                                reportData = usageReportData,
+                                                importantNotifications = importantNotifications,
+                                                pomodoroState = pomodoroState,
+                                                activeFocusSound = activeFocusSound,
+                                                installedWidgetIds = settings.installedWidgetIds,
+                                                appWidgetHost = appWidgetHost,
+                                                appWidgetManager = appWidgetManager,
+                                                onStartPomodoro = { viewModel.startPomodoro() },
+                                                onPausePomodoro = { viewModel.pausePomodoro() },
+                                                onResetPomodoro = { viewModel.resetPomodoro() },
+                                                onSwitchPomodoroMode = { viewModel.switchPomodoroMode(it) },
+                                                onToggleFocusSound = { viewModel.triggerFocusSound(null) },
+                                                onAppClick = { pkg ->
+                                                    SystemLauncherHelper.performGlowAppOpenHaptic(context)
+                                                    SystemLauncherHelper.launchPackage(context, pkg)
+                                                },
+                                                onRequestNotificationAccess = {
+                                                    ProductiveNotificationListenerService.openNotificationAccessSettings(context)
+                                                },
+                                                onRequestUsageAccess = {
+                                                    SystemLauncherHelper.openUsageAccessSettings(context)
+                                                },
+                                                onAddCustomWidgetClick = {
+                                                    runCatching {
+                                                        val newId = appWidgetHost.allocateAppWidgetId()
+                                                        val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+                                                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, newId)
+                                                        }
+                                                        widgetPickLauncher.launch(pickIntent)
+                                                    }
+                                                },
+                                                onRemoveCustomWidgetClick = { id ->
+                                                    runCatching { appWidgetHost.deleteAppWidgetId(id) }
+                                                    viewModel.removeInstalledAppWidgetId(id)
+                                                },
+                                                onBackToHome = {
+                                                    coroutineScope.launch { pagerState.animateScrollToPage(1) }
                                                 }
-                                            }
+                                            )
                                         }
-                                    },
-                                    onSwipeUpSearch = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.openSearchDrawer()
-                                    },
-                                    onSwipeDownNotifications = {
-                                        SystemLauncherHelper.expandNotificationShade(context)
-                                    },
-                                    onCanvasSwipeLeft = {
-                                        // Quick Launch Left (Camera / Notes)
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        if (settings.canvasSwipeLeftPkg.isNotEmpty()) {
-                                            SystemLauncherHelper.launchPackage(context, settings.canvasSwipeLeftPkg)
-                                        } else {
-                                            runCatching {
-                                                context.startActivity(
-                                                    Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
-                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onCanvasSwipeRight = {
-                                        // Quick Launch Right (Phone Dialer)
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        if (settings.canvasSwipeRightPkg.isNotEmpty()) {
-                                            SystemLauncherHelper.launchPackage(context, settings.canvasSwipeRightPkg)
-                                        } else {
-                                            runCatching {
-                                                context.startActivity(
-                                                    Intent(Intent.ACTION_DIAL, Uri.parse("tel:")).apply {
-                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onDoubleTapEmptySpace = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.toggleContrastThemeOnDoubleTap()
-                                    },
-                                    onLongPressEmptySpace = {
-                                        SystemLauncherHelper.performSubtleHaptic(context)
-                                        viewModel.openSettingsScreen()
                                     }
-                                )
+                                }
                             }
 
                             LauncherScreen.SEARCH_DRAWER -> {
@@ -382,6 +489,10 @@ class MainActivity : ComponentActivity() {
                                     filteredApps = filteredApps,
                                     omniResult = omniResult,
                                     settings = settings,
+                                    onBrowserEngineSearch = { query, engine ->
+                                        SystemLauncherHelper.searchBrowserEngine(context, query, engine)
+                                        viewModel.returnToHome()
+                                    },
                                     onQueryChange = { newQuery ->
                                         viewModel.updateSearchQuery(newQuery) { matchedApp ->
                                             SystemLauncherHelper.performGlowAppOpenHaptic(context)
@@ -470,6 +581,11 @@ class MainActivity : ComponentActivity() {
                                     onT9SearchChanged = { viewModel.setEnableT9Search(it) },
                                     onFrictionSecondsChanged = { viewModel.setFrictionSeconds(it) },
                                     onMindfulFrictionEnabledChanged = { viewModel.setMindfulFrictionEnabled(it) },
+                                    onHoldToOpenChanged = { viewModel.setEnableHoldToOpen(it) },
+                                    onHoldSecondsChanged = { viewModel.setHoldToOpenSeconds(it) },
+                                    onRequestNotificationAccess = {
+                                        ProductiveNotificationListenerService.openNotificationAccessSettings(context)
+                                    },
                                     onStatusBarStealthChanged = { viewModel.setStatusBarStealth(it) },
                                     onBottomDockedSearchChanged = { viewModel.setBottomDockedSearch(it) },
                                     onSwipeDownNotificationsChanged = { viewModel.setSwipeDownForNotifications(it) },

@@ -2,15 +2,16 @@ package com.productiveos.launcher.presentation.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,16 +32,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.productiveos.launcher.data.local.AppEntity
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
@@ -49,7 +58,9 @@ import com.productiveos.launcher.data.repository.WhisperItem
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.tactilePress
 import com.productiveos.launcher.util.FocusSoundMode
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -125,34 +136,20 @@ fun ZenHomeScreen(
                 )
             }
             .pointerInput(settings.swipeDownForNotifications) {
-                detectDragGestures(
-                    onDragStart = {
-                        totalCanvasDragX = 0f
-                        totalCanvasDragY = 0f
-                    },
+                var totalDragY = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { totalDragY = 0f },
                     onDragEnd = {
-                        val absX = kotlin.math.abs(totalCanvasDragX)
-                        val absY = kotlin.math.abs(totalCanvasDragY)
-
-                        if (absY > absX && absY > 80f) {
-                            if (totalCanvasDragY < -80f) {
-                                onSwipeUpSearch()
-                            } else if (totalCanvasDragY > 80f && settings.swipeDownForNotifications) {
-                                onSwipeDownNotifications()
-                            }
-                        } else if (absX > absY && absX > 100f) {
-                            if (totalCanvasDragX < -100f) {
-                                onCanvasSwipeLeft()
-                            } else if (totalCanvasDragX > 100f) {
-                                onCanvasSwipeRight()
-                            }
+                        if (totalDragY < -70f) {
+                            onSwipeUpSearch()
+                        } else if (totalDragY > 70f && settings.swipeDownForNotifications) {
+                            onSwipeDownNotifications()
                         }
-                        totalCanvasDragX = 0f
-                        totalCanvasDragY = 0f
+                        totalDragY = 0f
                     },
-                    onDrag = { _, dragAmount ->
-                        totalCanvasDragX += dragAmount.x
-                        totalCanvasDragY += dragAmount.y
+                    onDragCancel = { totalDragY = 0f },
+                    onVerticalDrag = { _, dragAmount ->
+                        totalDragY += dragAmount
                     }
                 )
             }
@@ -323,39 +320,13 @@ fun ZenHomeScreen(
                     }
                 } else {
                     pinnedApps.take(6).forEach { app ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .tactilePress(
-                                    minTouchHeight = true,
-                                    enableGlow = true,
-                                    onClick = { onAppClick(app) },
-                                    onLongClick = { onAppLongClick(app) }
-                                )
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = when (settings.textAlignment) {
-                                TextAlignmentOption.LEFT -> Arrangement.Start
-                                TextAlignmentOption.CENTER -> Arrangement.Center
-                                TextAlignmentOption.RIGHT -> Arrangement.End
-                            }
-                        ) {
-                            Text(
-                                text = app.displayName.lowercase(),
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = palette.primaryText,
-                                textAlign = textAlign
-                            )
-                            if (app.isFrictionEnabled) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(5.dp)
-                                        .clip(CircleShape)
-                                        .background(palette.mutedText)
-                                )
-                            }
-                        }
+                        IntentionalHoldAppRow(
+                            app = app,
+                            settings = settings,
+                            textAlign = textAlign,
+                            onAppClick = onAppClick,
+                            onAppLongClick = onAppLongClick
+                        )
                     }
                 }
             }
@@ -412,6 +383,148 @@ fun ZenHomeScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = palette.secondaryText,
                         modifier = Modifier.clickable(onClick = onLongPressEmptySpace)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntentionalHoldAppRow(
+    app: AppEntity,
+    settings: LauncherSettings,
+    textAlign: TextAlign,
+    onAppClick: (AppEntity) -> Unit,
+    onAppLongClick: (AppEntity) -> Unit
+) {
+    val palette = LocalProductiveOSPalette.current
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var isHolding by remember { mutableStateOf(false) }
+    val progress = remember { Animatable(0f) }
+    val holdDurationMs = (settings.holdToOpenSeconds * 1000L).coerceAtLeast(1000L)
+    val remainingSeconds = ((1f - progress.value) * settings.holdToOpenSeconds).toInt() + 1
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isHolding) palette.surfaceElevated.copy(alpha = 0.6f) else Color.Transparent)
+            .border(
+                width = if (isHolding) 1.dp else 0.dp,
+                color = if (isHolding) palette.borderSubtle else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .pointerInput(settings.enableHoldToOpen, settings.holdToOpenSeconds) {
+                if (!settings.enableHoldToOpen) {
+                    detectTapGestures(
+                        onTap = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onAppClick(app)
+                        },
+                        onLongPress = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onAppLongClick(app)
+                        }
+                    )
+                } else {
+                    detectTapGestures(
+                        onPress = {
+                            isHolding = true
+                            progress.snapTo(0f)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+                            val animJob = coroutineScope.launch {
+                                val startTime = System.currentTimeMillis()
+                                var lastTick = startTime
+                                while (System.currentTimeMillis() - startTime < holdDurationMs) {
+                                    val elapsed = System.currentTimeMillis() - startTime
+                                    progress.snapTo((elapsed.toFloat() / holdDurationMs).coerceIn(0f, 1f))
+                                    if (System.currentTimeMillis() - lastTick >= 700L) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        lastTick = System.currentTimeMillis()
+                                    }
+                                    delay(16L)
+                                }
+                                progress.snapTo(1f)
+                            }
+
+                            val released = tryAwaitRelease()
+                            animJob.cancel()
+                            if (progress.value >= 0.98f) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onAppClick(app)
+                            }
+                            isHolding = false
+                            progress.snapTo(0f)
+                        },
+                        onLongPress = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onAppLongClick(app)
+                        }
+                    )
+                }
+            }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = when (settings.textAlignment) {
+                TextAlignmentOption.LEFT -> Arrangement.Start
+                TextAlignmentOption.CENTER -> Arrangement.Center
+                TextAlignmentOption.RIGHT -> Arrangement.End
+            }
+        ) {
+            Text(
+                text = app.displayName.lowercase(),
+                style = MaterialTheme.typography.headlineMedium,
+                color = palette.primaryText,
+                textAlign = textAlign
+            )
+
+            if (app.isFrictionEnabled) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(palette.mutedText)
+                )
+            }
+
+            if (isHolding && settings.enableHoldToOpen) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val stroke = 2.dp.toPx()
+                            drawArc(
+                                color = palette.borderSubtle,
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = Stroke(width = stroke)
+                            )
+                            drawArc(
+                                color = palette.primaryText,
+                                startAngle = -90f,
+                                sweepAngle = progress.value * 360f,
+                                useCenter = false,
+                                style = Stroke(width = stroke, cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "hold ${remainingSeconds}s",
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                        color = palette.secondaryText
                     )
                 }
             }

@@ -18,6 +18,10 @@ import com.productiveos.launcher.data.repository.UsageStatsHelper
 import com.productiveos.launcher.data.repository.WeeklyAwarenessSummary
 import com.productiveos.launcher.data.repository.WhisperEngine
 import com.productiveos.launcher.data.repository.WhisperItem
+import com.productiveos.launcher.data.repository.ReportPeriod
+import com.productiveos.launcher.data.repository.UsageReportData
+import com.productiveos.launcher.data.service.ImportantNotificationData
+import com.productiveos.launcher.data.service.ProductiveNotificationListenerService
 import com.productiveos.launcher.util.FocusAudioGenerator
 import com.productiveos.launcher.util.FocusSoundMode
 import com.productiveos.launcher.util.OmniSearchEvaluator
@@ -26,6 +30,8 @@ import com.productiveos.launcher.util.SystemLauncherHelper
 import com.productiveos.launcher.util.WallpaperHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +41,30 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
+
+enum class PomodoroMode(val title: String, val durationMinutes: Int) {
+    FOCUS_25("25m Focus", 25),
+    SHORT_BREAK("5m Break", 5),
+    LONG_BREAK("15m Rest", 15)
+}
+
+data class PomodoroState(
+    val mode: PomodoroMode = PomodoroMode.FOCUS_25,
+    val remainingSeconds: Int = 25 * 60,
+    val totalSeconds: Int = 25 * 60,
+    val isRunning: Boolean = false,
+    val completedSessions: Int = 0
+) {
+    val progress: Float
+        get() = if (totalSeconds > 0) (1f - remainingSeconds.toFloat() / totalSeconds).coerceIn(0f, 1f) else 0f
+
+    val formattedTime: String
+        get() {
+            val mins = remainingSeconds / 60
+            val secs = remainingSeconds % 60
+            return "%02d:%02d".format(mins, secs)
+        }
+}
 
 enum class LauncherScreen {
     ZEN_HOME,
@@ -82,6 +112,19 @@ class LauncherViewModel @Inject constructor(
 
     private val _dailyTelemetry = MutableStateFlow(DailyTelemetry())
     val dailyTelemetry: StateFlow<DailyTelemetry> = _dailyTelemetry.asStateFlow()
+
+    private val _reportPeriod = MutableStateFlow(ReportPeriod.DAILY)
+    val reportPeriod: StateFlow<ReportPeriod> = _reportPeriod.asStateFlow()
+
+    private val _usageReportData = MutableStateFlow(UsageReportData())
+    val usageReportData: StateFlow<UsageReportData> = _usageReportData.asStateFlow()
+
+    private val _pomodoroState = MutableStateFlow(PomodoroState())
+    val pomodoroState: StateFlow<PomodoroState> = _pomodoroState.asStateFlow()
+    private var pomodoroJob: Job? = null
+
+    val importantNotifications: StateFlow<ImportantNotificationData> =
+        ProductiveNotificationListenerService.notificationsFlow
 
     private val _isDefaultLauncher = MutableStateFlow(true)
     val isDefaultLauncher: StateFlow<Boolean> = _isDefaultLauncher.asStateFlow()
@@ -209,9 +252,73 @@ class LauncherViewModel @Inject constructor(
                 _dailyTelemetry.value = usageStatsHelper.queryTodayTelemetry()
             }
             runCatching {
+                _usageReportData.value = usageStatsHelper.queryReportData(_reportPeriod.value)
+            }
+            runCatching {
                 whisperEngine.refreshWhisper()
             }
         }
+    }
+
+    fun setReportPeriod(period: ReportPeriod) {
+        _reportPeriod.value = period
+        viewModelScope.launch {
+            runCatching {
+                _usageReportData.value = usageStatsHelper.queryReportData(period)
+            }
+        }
+    }
+
+    fun startPomodoro() {
+        if (_pomodoroState.value.isRunning) return
+        _pomodoroState.value = _pomodoroState.value.copy(isRunning = true)
+        pomodoroJob?.cancel()
+        pomodoroJob = viewModelScope.launch {
+            while (_pomodoroState.value.isRunning && _pomodoroState.value.remainingSeconds > 0) {
+                delay(1_000L)
+                val current = _pomodoroState.value
+                if (current.isRunning) {
+                    val nextSec = current.remainingSeconds - 1
+                    if (nextSec <= 0) {
+                        _pomodoroState.value = current.copy(
+                            remainingSeconds = 0,
+                            isRunning = false,
+                            completedSessions = current.completedSessions + 1
+                        )
+                        showTemporaryMessage("Pomodoro session completed · Take a mindful pause")
+                        break
+                    } else {
+                        _pomodoroState.value = current.copy(remainingSeconds = nextSec)
+                    }
+                }
+            }
+        }
+    }
+
+    fun pausePomodoro() {
+        pomodoroJob?.cancel()
+        _pomodoroState.value = _pomodoroState.value.copy(isRunning = false)
+    }
+
+    fun resetPomodoro() {
+        pomodoroJob?.cancel()
+        val defaultSec = _pomodoroState.value.mode.durationMinutes * 60
+        _pomodoroState.value = _pomodoroState.value.copy(
+            remainingSeconds = defaultSec,
+            totalSeconds = defaultSec,
+            isRunning = false
+        )
+    }
+
+    fun switchPomodoroMode(mode: PomodoroMode) {
+        pomodoroJob?.cancel()
+        val totalSec = mode.durationMinutes * 60
+        _pomodoroState.value = _pomodoroState.value.copy(
+            mode = mode,
+            remainingSeconds = totalSec,
+            totalSeconds = totalSec,
+            isRunning = false
+        )
     }
 
     fun openSearchDrawer() {
@@ -536,6 +643,32 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun setEnableHoldToOpen(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setEnableHoldToOpen(enabled)
+        }
+    }
+
+    fun setHoldToOpenSeconds(seconds: Int) {
+        viewModelScope.launch {
+            preferencesRepository.setHoldToOpenSeconds(seconds)
+        }
+    }
+
+    fun addInstalledAppWidgetId(widgetId: Int) {
+        viewModelScope.launch {
+            preferencesRepository.addInstalledWidgetId(widgetId)
+            showTemporaryMessage("Widget added to Gallery")
+        }
+    }
+
+    fun removeInstalledAppWidgetId(widgetId: Int) {
+        viewModelScope.launch {
+            preferencesRepository.removeInstalledWidgetId(widgetId)
+            showTemporaryMessage("Widget removed")
+        }
+    }
+
     fun setVaultPasscode(passcode: String) {
         viewModelScope.launch {
             preferencesRepository.setVaultPasscode(passcode)
@@ -574,7 +707,7 @@ class LauncherViewModel @Inject constructor(
 
     fun syncWallpapersWithCurrentTheme() {
         viewModelScope.launch {
-            val isLight = effectiveTheme.value == LauncherThemeOption.WARM_STONE
+            val isLight = effectiveTheme.value.isLight
             val ok = WallpaperHelper.setSolidThemeWallpaper(appContext, isLight)
             if (ok) {
                 showTemporaryMessage("System & Lock wallpapers synced to minimalist theme")

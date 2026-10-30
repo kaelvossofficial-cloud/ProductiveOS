@@ -77,27 +77,37 @@ jobs:
 
           ---
 
-          ### 🌟 What's New & Core Features
-          - ⚡ **Quantum Clip (Zero-Click Clipboard Vault)**:
-            - Background local clipboard indexing (capped at 50 items, 7-day auto-purge, zero telemetry).
-            - Quick access via \`c/\` or \`clips\` in the search bar or bottom bar tap.
-          - 🎵 **Focus Anchor (Live Acoustic Flow Synthesizer)**:
-            - Real-time generative PCM synthesizer (Rain, Cafe Brownian noise, 10Hz Alpha Binaural flow).
-            - Live waveform pill on Zen Home (\`ılılı focus anchor · ... · tap to stop\`).
-          - 📝 **Micro-Log (Instant Second-Brain Capture)**:
-            - Fast 1.5s thought dump: \`log [thought]\` automatically writes timestamped entries into \`ProductiveOS/Inbox.md\` and Room database.
-            - Full-featured journal sheet to view, quick-append, copy, and export/share markdown.
-          - 🔥 **Burner Notes (Ephemeral 24-Hour Scratchpad)**:
-            - Zero-save scratchpad designed for temporary codes and fleeting notes.
-            - Auto-purges 24 hours after your last keystroke with a live countdown ticker.
-          - 🛡️ **PathCheck (Habit Breaker & Mindful Intent Gate)**:
-            - Anti-dopamine pause before launching distracting apps with 3 reflection pills: \`[Boredom]\`, \`[Need Info]\`, \`[Habit]\`.
-            - 7-day Weekly Mindful Awareness dashboard in Settings.
-          - 🔤 **Pro Launcher Enhancements**:
-            - Right-edge **A–Z Alphabet Wave Scrubber** with haptic steps and 32sp projected serif indicator.
-            - **Omni-Search Engine**: Inline math calculations (\`=\`), web bang (\`?\`), maps bang (\`@\`), and focus timer (\`t 15\`).
-            - **Daylight Auto-Theme**: Warm Stone (\`#F5F5F0\`) by day, OLED Black at night with solid wallpaper sync.
-            - **Ergonomics**: Dock swipe-right secondary apps, bottom-docked search mode, and stealth status bar.
+          ### 🌟 What's New in v1.2.0
+
+          - 🎛️ **Swipe Left for Minimalist Widget Gallery**:
+            - **Screen Time Ring Widget**: Real-time circular arc displaying screen time and unlocks against mindful budget.
+            - **Interactive Pomodoro Focus Engine**: 25m Focus, 5m Break, 15m Rest with Start/Pause/Reset controls, progress arc, and ambient audio flow integration.
+            - **Most Used Apps Widget**: Dynamic horizontal usage bars showing your top apps by conscious attention consumed.
+            - **Important Notifications Widget**: Live filtered notifications from Messages, WhatsApp, Telegram, Gmail, and Calendar with one-tap jump to app.
+            - **Focus Graphs & Rhythm Widget**: 7-day sparkline bar trend and ProductiveOS Zen index.
+            - **Third-Party Android App Widgets**: Host any Android widget (Weather, Spotify, Notes, Stocks) wrapped inside high-end OS theme containers.
+
+          - 📊 **Swipe Right for Mindful Reports Dashboard**:
+            - **Daily, Weekly, and Monthly Period Selector**: Effortless navigation between timeframes.
+            - **Concentric Radial Ring Chart**: Multi-layer canvas rings mapping screen time percentage and unlock ratios.
+            - **Screen Time Over Days**: 7-day vertical bar chart with dashed 4h mindful benchmark line.
+            - **Time of Day Distribution**: Visual split between Morning (06:00–12:00), Afternoon (12:00–18:00), and Evening (18:00–24:00).
+            - **Overview by ProductiveOS**: Zen Mindful score (0–100), average gap between unlocks, and screen-off rest hours.
+
+          - 🔍 **Omni-Search with Browser Recommendations**:
+            - Instant search suggestions: Google, YouTube, Wikipedia, DuckDuckGo recommendation pills.
+            - Pressing **Enter** immediately searches Google in your default browser without pre-opening any Google app.
+
+          - 🛡️ **Intentional 3-Second Hold-to-Open Gate (Impulse & Mis-Touch Protection)**:
+            - Apps on Zen Home will not open on accidental tap; requires holding for 3 seconds.
+            - Progressive countdown ring with tactile tick feedback. Configurable (1s, 2s, 3s or instant tap) in Settings.
+
+          - 🎨 **Plain Sleek Thin Colors Themes**:
+            - New editorial palettes: **Pale Sage** (\`#EAEFE9\`), **Tokyo Mist** (\`#E9EEF3\`), **Ochre Sand** (\`#F5EFE6\`), and **Midnight Navy** (\`#0B101B\`).
+            - High-contrast typography and ultra-thin \`0.75dp\` borders based on the UI/UX Pro Max standard.
+
+          - ⚡ **Retained Micro-OS Utilities**:
+            - Quantum Clip Vault, Focus Anchor ambient generator, Micro-Log second-brain capture, Burner Notes 24h ephemeral scratchpad, and PathCheck impulse gate.
 
           ---
 

@@ -218,20 +218,37 @@ object SystemLauncherHelper {
     }
 
     fun searchWeb(context: Context, query: String) {
+        val googleUrl = "https://www.google.com/search?q=" + Uri.encode(query)
         runCatching {
-            val searchIntent = Intent(Intent.ACTION_WEB_SEARCH).apply {
-                putExtra(SearchManager.QUERY, query)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(searchIntent)
-        }.onFailure {
-            val browserIntent = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://www.google.com/search?q=" + Uri.encode(query))
-            ).apply {
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(googleUrl)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(browserIntent)
+        }.onFailure {
+            runCatching {
+                val searchIntent = Intent(Intent.ACTION_WEB_SEARCH).apply {
+                    putExtra(SearchManager.QUERY, query)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(searchIntent)
+            }
+        }
+    }
+
+    fun searchBrowserEngine(context: Context, query: String, engine: String = "google") {
+        val url = when (engine.lowercase()) {
+            "youtube" -> "https://www.youtube.com/results?search_query=" + Uri.encode(query)
+            "wikipedia" -> "https://en.wikipedia.org/wiki/Special:Search?search=" + Uri.encode(query)
+            "duckduckgo" -> "https://duckduckgo.com/?q=" + Uri.encode(query)
+            else -> "https://www.google.com/search?q=" + Uri.encode(query)
+        }
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            searchWeb(context, query)
         }
     }
 

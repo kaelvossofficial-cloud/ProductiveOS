@@ -33,7 +33,14 @@ enum class TypographyStyleOption(val title: String) {
 enum class LauncherThemeOption(val title: String, val hexLabel: String) {
     OLED_BLACK("Pure OLED Black", "#000000"),
     SLATE_GRAY("Slate Gray", "#121212"),
-    WARM_STONE("Warm Stone", "#F5F5F0")
+    WARM_STONE("Warm Stone", "#F5F5F0"),
+    PALE_SAGE("Pale Sage", "#EAEFE9"),
+    TOKYO_MIST("Tokyo Mist", "#E9EEF3"),
+    OCHRE_SAND("Ochre Sand", "#F5EFE6"),
+    MIDNIGHT_NAVY("Midnight Navy", "#0B101B");
+
+    val isLight: Boolean
+        get() = this == WARM_STONE || this == PALE_SAGE || this == TOKYO_MIST || this == OCHRE_SAND
 }
 
 data class LauncherSettings(
@@ -45,6 +52,9 @@ data class LauncherSettings(
     val enableT9Search: Boolean = true,
     val frictionSeconds: Int = 3,
     val mindfulFrictionEnabled: Boolean = true,
+    val enableHoldToOpen: Boolean = true,
+    val holdToOpenSeconds: Int = 3,
+    val installedWidgetIds: List<Int> = emptyList(),
     val vaultPasscode: String = "",
     val hasInitializedDefaults: Boolean = false,
     val statusBarStealth: Boolean = false,
@@ -71,6 +81,9 @@ class LauncherPreferencesRepository @Inject constructor(
         val ENABLE_T9_SEARCH = booleanPreferencesKey("enable_t9_search")
         val FRICTION_SECONDS = intPreferencesKey("friction_seconds")
         val MINDFUL_FRICTION_ENABLED = booleanPreferencesKey("mindful_friction_enabled")
+        val ENABLE_HOLD_TO_OPEN = booleanPreferencesKey("enable_hold_to_open")
+        val HOLD_TO_OPEN_SECONDS = intPreferencesKey("hold_to_open_seconds")
+        val INSTALLED_WIDGET_IDS = stringPreferencesKey("installed_widget_ids")
         val VAULT_PASSCODE = stringPreferencesKey("vault_passcode")
         val HAS_INITIALIZED_DEFAULTS = booleanPreferencesKey("has_initialized_defaults")
         val STATUS_BAR_STEALTH = booleanPreferencesKey("status_bar_stealth")
@@ -97,6 +110,11 @@ class LauncherPreferencesRepository @Inject constructor(
             runCatching { LauncherThemeOption.valueOf(it) }.getOrNull()
         } ?: LauncherThemeOption.OLED_BLACK
 
+        val widgetIds = prefs[Keys.INSTALLED_WIDGET_IDS]?.let { raw ->
+            raw.split(",")
+                .mapNotNull { it.trim().toIntOrNull() }
+        } ?: emptyList()
+
         LauncherSettings(
             textAlignment = alignment,
             typographyStyle = typography,
@@ -106,6 +124,9 @@ class LauncherPreferencesRepository @Inject constructor(
             enableT9Search = prefs[Keys.ENABLE_T9_SEARCH] ?: true,
             frictionSeconds = prefs[Keys.FRICTION_SECONDS] ?: 3,
             mindfulFrictionEnabled = prefs[Keys.MINDFUL_FRICTION_ENABLED] ?: true,
+            enableHoldToOpen = prefs[Keys.ENABLE_HOLD_TO_OPEN] ?: true,
+            holdToOpenSeconds = prefs[Keys.HOLD_TO_OPEN_SECONDS] ?: 3,
+            installedWidgetIds = widgetIds,
             vaultPasscode = prefs[Keys.VAULT_PASSCODE] ?: "",
             hasInitializedDefaults = prefs[Keys.HAS_INITIALIZED_DEFAULTS] ?: false,
             statusBarStealth = prefs[Keys.STATUS_BAR_STEALTH] ?: false,
@@ -164,6 +185,34 @@ class LauncherPreferencesRepository @Inject constructor(
 
     suspend fun setMindfulFrictionEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.MINDFUL_FRICTION_ENABLED] = enabled }
+    }
+
+    suspend fun setEnableHoldToOpen(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.ENABLE_HOLD_TO_OPEN] = enabled }
+    }
+
+    suspend fun setHoldToOpenSeconds(seconds: Int) {
+        context.dataStore.edit { it[Keys.HOLD_TO_OPEN_SECONDS] = seconds.coerceIn(1, 5) }
+    }
+
+    suspend fun addInstalledWidgetId(widgetId: Int) {
+        context.dataStore.edit { prefs ->
+            val existing = prefs[Keys.INSTALLED_WIDGET_IDS]?.let { raw ->
+                raw.split(",").mapNotNull { it.trim().toIntOrNull() }
+            } ?: emptyList()
+            if (!existing.contains(widgetId)) {
+                prefs[Keys.INSTALLED_WIDGET_IDS] = (existing + widgetId).joinToString(",")
+            }
+        }
+    }
+
+    suspend fun removeInstalledWidgetId(widgetId: Int) {
+        context.dataStore.edit { prefs ->
+            val existing = prefs[Keys.INSTALLED_WIDGET_IDS]?.let { raw ->
+                raw.split(",").mapNotNull { it.trim().toIntOrNull() }
+            } ?: emptyList()
+            prefs[Keys.INSTALLED_WIDGET_IDS] = existing.filter { it != widgetId }.joinToString(",")
+        }
     }
 
     suspend fun setVaultPasscode(passcode: String) {

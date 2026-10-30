@@ -90,6 +90,59 @@ val WarmStonePalette = ProductiveOSPalette(
     isLight = true
 )
 
+// BLOCK: Plain Sleek Thin Colors Palettes (Editorial, Low-Fatigue, High Aesthetic Contrast)
+val PaleSagePalette = ProductiveOSPalette(
+    background = Color(0xFFEAEFE9),
+    surface = Color(0xFFDFE6DE),
+    surfaceElevated = Color(0xFFD5DED4),
+    primaryText = Color(0xFF1B231D),
+    secondaryText = Color(0xFF566258),
+    mutedText = Color(0xFF828F84),
+    borderSubtle = Color(0xFFC8D2C7),
+    accentDot = Color(0xFF273429),
+    glowColor = Color(0x44273429),
+    isLight = true
+)
+
+val TokyoMistPalette = ProductiveOSPalette(
+    background = Color(0xFFE9EEF3),
+    surface = Color(0xFFDFE5EB),
+    surfaceElevated = Color(0xFFD4DCE3),
+    primaryText = Color(0xFF141A21),
+    secondaryText = Color(0xFF515C67),
+    mutedText = Color(0xFF7E8A96),
+    borderSubtle = Color(0xFFC7D1DB),
+    accentDot = Color(0xFF1D2630),
+    glowColor = Color(0x441D2630),
+    isLight = true
+)
+
+val OchreSandPalette = ProductiveOSPalette(
+    background = Color(0xFFF5EFE6),
+    surface = Color(0xFFEBE3D7),
+    surfaceElevated = Color(0xFFE0D7C9),
+    primaryText = Color(0xFF231F1A),
+    secondaryText = Color(0xFF655D53),
+    mutedText = Color(0xFF948A7D),
+    borderSubtle = Color(0xFFD5CBBC),
+    accentDot = Color(0xFF322C24),
+    glowColor = Color(0x44322C24),
+    isLight = true
+)
+
+val MidnightNavyPalette = ProductiveOSPalette(
+    background = Color(0xFF0B101B),
+    surface = Color(0xFF121826),
+    surfaceElevated = Color(0xFF1A2234),
+    primaryText = Color(0xFFE8EEF8),
+    secondaryText = Color(0xFF8B9CB2),
+    mutedText = Color(0xFF5A6B81),
+    borderSubtle = Color(0xFF243048),
+    accentDot = Color(0xFFADC2E0),
+    glowColor = Color(0x44ADC2E0),
+    isLight = false
+)
+
 val LocalProductiveOSPalette = staticCompositionLocalOf { OledBlackPalette }
 val LocalProductiveOSFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.SansSerif }
 val LocalProductiveOSFontScale = staticCompositionLocalOf { 1.0f }
@@ -172,6 +225,10 @@ fun ProductiveOSTheme(
         LauncherThemeOption.OLED_BLACK -> OledBlackPalette
         LauncherThemeOption.SLATE_GRAY -> SlateGrayPalette
         LauncherThemeOption.WARM_STONE -> WarmStonePalette
+        LauncherThemeOption.PALE_SAGE -> PaleSagePalette
+        LauncherThemeOption.TOKYO_MIST -> TokyoMistPalette
+        LauncherThemeOption.OCHRE_SAND -> OchreSandPalette
+        LauncherThemeOption.MIDNIGHT_NAVY -> MidnightNavyPalette
     }
 
     val fontFamily = when (typographyStyle) {
