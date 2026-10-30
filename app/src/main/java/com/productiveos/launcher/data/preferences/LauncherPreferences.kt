@@ -162,6 +162,10 @@ class LauncherPreferencesRepository @Inject constructor(
                 LauncherThemeOption.OLED_BLACK -> LauncherThemeOption.WARM_STONE
                 LauncherThemeOption.SLATE_GRAY -> LauncherThemeOption.OLED_BLACK
                 LauncherThemeOption.WARM_STONE -> LauncherThemeOption.OLED_BLACK
+                LauncherThemeOption.PALE_SAGE -> LauncherThemeOption.OLED_BLACK
+                LauncherThemeOption.TOKYO_MIST -> LauncherThemeOption.OLED_BLACK
+                LauncherThemeOption.OCHRE_SAND -> LauncherThemeOption.OLED_BLACK
+                LauncherThemeOption.MIDNIGHT_NAVY -> LauncherThemeOption.WARM_STONE
             }
             prefs[Keys.THEME_OPTION] = next.name
         }

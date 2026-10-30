@@ -875,3 +875,4 @@ private fun ThirdPartyWidgetsSection(
         }
     }
 }
+

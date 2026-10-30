@@ -787,3 +787,4 @@ private fun MindfulnessOverviewCard(reportData: UsageReportData) {
         }
     }
 }
+
