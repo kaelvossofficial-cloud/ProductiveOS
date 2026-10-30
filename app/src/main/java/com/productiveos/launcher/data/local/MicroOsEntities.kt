@@ -77,3 +77,4 @@ interface MicroOsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPathCheckLog(entry: PathCheckLogEntity)
 }
+

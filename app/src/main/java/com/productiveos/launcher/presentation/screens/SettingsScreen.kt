@@ -319,20 +319,20 @@ fun SettingsScreen(
                     color = palette.primaryText
                 )
                 Text(
-                    text = "${weeklyAwareness.intentionalPercent}% intentional",
+                    text = "${weeklyAwareness.needInfoPct}% intentional",
                     style = MaterialTheme.typography.labelMedium,
                     color = palette.secondaryText
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "need info: ${weeklyAwareness.needInfoCount} · boredom: ${weeklyAwareness.boredomCount} · habit: ${weeklyAwareness.habitCount}",
+                text = weeklyAwareness.summaryText,
                 style = MaterialTheme.typography.labelMedium,
                 color = palette.secondaryText
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "mindfully cancelled: ${weeklyAwareness.cancelledCount} · proceeded: ${weeklyAwareness.launchedCount}",
+                text = "need info: ${weeklyAwareness.needInfoPct}% · boredom: ${weeklyAwareness.boredomPct}% · habit: ${weeklyAwareness.habitPct}% (${weeklyAwareness.totalChecks} checks)",
                 style = MaterialTheme.typography.labelMedium,
                 color = palette.mutedText
             )
