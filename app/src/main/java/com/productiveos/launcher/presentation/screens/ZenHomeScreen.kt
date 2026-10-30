@@ -1,6 +1,7 @@
 package com.productiveos.launcher.presentation.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -47,6 +48,7 @@ import com.productiveos.launcher.data.repository.DailyTelemetry
 import com.productiveos.launcher.data.repository.WhisperItem
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.tactilePress
+import com.productiveos.launcher.util.FocusSoundMode
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -57,6 +59,7 @@ fun ZenHomeScreen(
     pinnedApps: List<AppEntity>,
     telemetry: DailyTelemetry,
     whisperItem: WhisperItem,
+    activeFocusSound: FocusSoundMode?,
     settings: LauncherSettings,
     isDefaultLauncher: Boolean,
     onSetDefaultLauncherClick: () -> Unit,
@@ -64,6 +67,9 @@ fun ZenHomeScreen(
     onDateClick: () -> Unit,
     onTelemetryPillClick: () -> Unit,
     onWhisperClick: () -> Unit,
+    onToggleFocusSound: () -> Unit,
+    onOpenBurnerNote: () -> Unit,
+    onOpenQuantumClip: () -> Unit,
     onAppClick: (AppEntity) -> Unit,
     onAppLongClick: (AppEntity) -> Unit,
     onAppSwipeRight: (AppEntity) -> Unit,
@@ -226,9 +232,35 @@ fun ZenHomeScreen(
                     )
                 }
 
+                // Focus Anchor Live Waveform Pill (when active)
+                AnimatedVisibility(
+                    visible = activeFocusSound != null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    if (activeFocusSound != null) {
+                        Row(
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(palette.surfaceElevated)
+                                .border(1.dp, palette.primaryText.copy(alpha = 0.45f), RoundedCornerShape(50))
+                                .clickable(onClick = onToggleFocusSound)
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "ılılı  focus anchor · ${activeFocusSound.label} · tap to stop",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.primaryText
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // BLOCK 1, ITEM 2: Editorial Contextual Whisper Header
+                // Editorial Contextual Whisper Header
                 AnimatedContent(
                     targetState = whisperItem,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -333,7 +365,7 @@ fun ZenHomeScreen(
                 }
             }
 
-            // Bottom Navigation / Search Trigger
+            // Bottom Navigation / Micro-OS Dock Trigger
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -343,15 +375,37 @@ fun ZenHomeScreen(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .clickable(onClick = onSwipeUpSearch)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "↑ swipe up or tap to search",
+                        text = "↑ search",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier.clickable(onClick = onSwipeUpSearch)
+                    )
+                    Text(
+                        text = "·",
                         style = MaterialTheme.typography.labelMedium,
                         color = palette.mutedText
+                    )
+                    Text(
+                        text = "burner",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier.clickable(onClick = onOpenBurnerNote)
+                    )
+                    Text(
+                        text = "·",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.mutedText
+                    )
+                    Text(
+                        text = "clips",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier.clickable(onClick = onOpenQuantumClip)
                     )
                     Text(
                         text = "·",

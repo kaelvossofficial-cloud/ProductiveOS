@@ -44,8 +44,10 @@ import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.LauncherThemeOption
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
 import com.productiveos.launcher.data.preferences.TypographyStyleOption
+import com.productiveos.launcher.data.repository.WeeklyAwarenessSummary
 import com.productiveos.launcher.presentation.components.ActionPillButton
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
+import com.productiveos.launcher.util.FocusSoundMode
 import kotlin.math.roundToInt
 
 @Composable
@@ -54,6 +56,8 @@ fun SettingsScreen(
     isDefaultLauncher: Boolean,
     pinnedApps: List<AppEntity>,
     hiddenApps: List<AppEntity>,
+    weeklyAwareness: WeeklyAwarenessSummary,
+    activeFocusSound: FocusSoundMode?,
     onBackToHome: () -> Unit,
     onSetDefaultLauncher: () -> Unit,
     onSwitchSystemLauncher: () -> Unit,
@@ -71,6 +75,10 @@ fun SettingsScreen(
     onOmniSearchToolsChanged: (Boolean) -> Unit,
     onAutoDayNightThemeChanged: (Boolean) -> Unit,
     onSyncWallpaperClicked: () -> Unit,
+    onOpenQuantumClip: () -> Unit,
+    onOpenMicroLog: () -> Unit,
+    onOpenBurnerNote: () -> Unit,
+    onStartFocusSound: (FocusSoundMode?) -> Unit,
     onMovePinnedApp: (AppEntity, Boolean) -> Unit,
     onUnpinApp: (AppEntity) -> Unit,
     onUnhideApp: (AppEntity) -> Unit,
@@ -255,8 +263,8 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // BLOCK 4, ITEM 2: MINDFUL FRICTION GATE
-        SectionHeader(title = "mindful friction gate")
+        // BLOCK 4, ITEM 2: MINDFUL FRICTION GATE & PATHCHECK AWARENESS
+        SectionHeader(title = "mindful friction gate & pathcheck")
         Spacer(modifier = Modifier.height(10.dp))
 
         ToggleSettingRow(
@@ -286,6 +294,119 @@ fun SettingsScreen(
                         onClick = { onFrictionSecondsChanged(seconds) }
                     )
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // PathCheck 7-Day Weekly Awareness Ratio Card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(palette.surface)
+                .border(1.dp, palette.borderSubtle, RoundedCornerShape(14.dp))
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "7-day pathcheck awareness",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = palette.primaryText
+                )
+                Text(
+                    text = "${weeklyAwareness.intentionalPercent}% intentional",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette.secondaryText
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "need info: ${weeklyAwareness.needInfoCount} · boredom: ${weeklyAwareness.boredomCount} · habit: ${weeklyAwareness.habitCount}",
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.secondaryText
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "mindfully cancelled: ${weeklyAwareness.cancelledCount} · proceeded: ${weeklyAwareness.launchedCount}",
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.mutedText
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // MICRO-OS UTILITIES HUB
+        SectionHeader(title = "micro-os utilities (native zero-bloat tools)")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OptionChip(
+                label = "quantum clips (c/)",
+                selected = false,
+                modifier = Modifier.weight(1f),
+                onClick = onOpenQuantumClip
+            )
+            OptionChip(
+                label = "micro-log (inbox.md)",
+                selected = false,
+                modifier = Modifier.weight(1f),
+                onClick = onOpenMicroLog
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OptionChip(
+            label = "open 24h burner scratchpad →",
+            selected = false,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpenBurnerNote
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "focus anchor acoustic synthesizer",
+            style = MaterialTheme.typography.bodyMedium,
+            color = palette.primaryText
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FocusSoundMode.entries.forEach { mode ->
+                OptionChip(
+                    label = when (mode) {
+                        FocusSoundMode.RAIN -> "rain"
+                        FocusSoundMode.CAFE_BROWN -> "cafe"
+                        FocusSoundMode.BINAURAL_ALPHA -> "alpha"
+                    },
+                    selected = activeFocusSound == mode,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        if (activeFocusSound == mode) {
+                            onStartFocusSound(null)
+                        } else {
+                            onStartFocusSound(mode)
+                        }
+                    }
+                )
+            }
+            if (activeFocusSound != null) {
+                OptionChip(
+                    label = "stop",
+                    selected = false,
+                    onClick = { onStartFocusSound(null) }
+                )
             }
         }
 

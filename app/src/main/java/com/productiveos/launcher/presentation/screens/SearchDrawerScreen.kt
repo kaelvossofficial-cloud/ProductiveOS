@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -109,12 +110,27 @@ fun SearchDrawerScreen(
     var scrubberHeightPx by remember { mutableFloatStateOf(1f) }
 
     val searchBarContent = @Composable {
+        var searchSwipeOffset by remember { mutableFloatStateOf(0f) }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
                 .background(palette.surface)
                 .border(1.dp, palette.borderSubtle, RoundedCornerShape(14.dp))
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (searchSwipeOffset < -90f) {
+                                onOmniClick(OmniSearchResult.QuantumClipCommand(filterQuery = "", label = "quantum clip"))
+                            }
+                            searchSwipeOffset = 0f
+                        },
+                        onDragCancel = { searchSwipeOffset = 0f },
+                        onHorizontalDrag = { _, dragAmount ->
+                            searchSwipeOffset += dragAmount
+                        }
+                    )
+                }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -122,11 +138,7 @@ fun SearchDrawerScreen(
             Box(modifier = Modifier.weight(1f)) {
                 if (query.isEmpty()) {
                     Text(
-                        text = if (settings.enableT9Search) {
-                            "type app name or t9 digits..."
-                        } else {
-                            "type app name..."
-                        },
+                        text = "type app, c/ clips, log, focus...",
                         style = MaterialTheme.typography.bodyLarge,
                         color = palette.mutedText
                     )
@@ -203,6 +215,11 @@ fun SearchDrawerScreen(
                         is OmniSearchResult.WebSearch -> omniResult.label
                         is OmniSearchResult.MapsSearch -> omniResult.label
                         is OmniSearchResult.TimerCommand -> omniResult.label
+                        is OmniSearchResult.QuantumClipCommand -> omniResult.label
+                        is OmniSearchResult.FocusAudioCommand -> omniResult.label
+                        is OmniSearchResult.MicroLogCapture -> omniResult.label
+                        is OmniSearchResult.OpenMicroLogVault -> omniResult.label
+                        is OmniSearchResult.OpenBurnerNote -> omniResult.label
                     }
 
                     Box(

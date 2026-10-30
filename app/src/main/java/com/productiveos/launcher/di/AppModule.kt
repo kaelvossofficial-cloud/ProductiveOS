@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.productiveos.launcher.data.local.AppDao
 import com.productiveos.launcher.data.local.AppDatabase
+import com.productiveos.launcher.data.local.MicroOsDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,5 +33,10 @@ object AppModule {
     fun provideAppDao(database: AppDatabase): AppDao {
         return database.appDao()
     }
-}
 
+    @Provides
+    @Singleton
+    fun provideMicroOsDao(database: AppDatabase): MicroOsDao {
+        return database.microOsDao()
+    }
+}

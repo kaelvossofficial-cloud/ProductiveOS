@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -52,7 +53,9 @@ data class LauncherSettings(
     val omniSearchToolsEnabled: Boolean = true,
     val autoDayNightTheme: Boolean = false,
     val canvasSwipeLeftPkg: String = "",
-    val canvasSwipeRightPkg: String = ""
+    val canvasSwipeRightPkg: String = "",
+    val burnerNoteText: String = "",
+    val burnerNoteUpdatedAt: Long = 0L
 )
 
 @Singleton
@@ -77,6 +80,8 @@ class LauncherPreferencesRepository @Inject constructor(
         val AUTO_DAY_NIGHT_THEME = booleanPreferencesKey("auto_day_night_theme")
         val CANVAS_SWIPE_LEFT_PKG = stringPreferencesKey("canvas_swipe_left_pkg")
         val CANVAS_SWIPE_RIGHT_PKG = stringPreferencesKey("canvas_swipe_right_pkg")
+        val BURNER_NOTE_TEXT = stringPreferencesKey("burner_note_text")
+        val BURNER_NOTE_UPDATED_AT = longPreferencesKey("burner_note_updated_at")
     }
 
     val settingsFlow: Flow<LauncherSettings> = context.dataStore.data.map { prefs ->
@@ -109,7 +114,9 @@ class LauncherPreferencesRepository @Inject constructor(
             omniSearchToolsEnabled = prefs[Keys.OMNI_SEARCH_TOOLS] ?: true,
             autoDayNightTheme = prefs[Keys.AUTO_DAY_NIGHT_THEME] ?: false,
             canvasSwipeLeftPkg = prefs[Keys.CANVAS_SWIPE_LEFT_PKG] ?: "",
-            canvasSwipeRightPkg = prefs[Keys.CANVAS_SWIPE_RIGHT_PKG] ?: ""
+            canvasSwipeRightPkg = prefs[Keys.CANVAS_SWIPE_RIGHT_PKG] ?: "",
+            burnerNoteText = prefs[Keys.BURNER_NOTE_TEXT] ?: "",
+            burnerNoteUpdatedAt = prefs[Keys.BURNER_NOTE_UPDATED_AT] ?: 0L
         )
     }
 
@@ -189,6 +196,25 @@ class LauncherPreferencesRepository @Inject constructor(
 
     suspend fun setCanvasSwipeRightPkg(pkg: String) {
         context.dataStore.edit { it[Keys.CANVAS_SWIPE_RIGHT_PKG] = pkg }
+    }
+
+    suspend fun updateBurnerNote(text: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.BURNER_NOTE_TEXT] = text
+            prefs[Keys.BURNER_NOTE_UPDATED_AT] = if (text.isBlank()) 0L else System.currentTimeMillis()
+        }
+    }
+
+    suspend fun purgeExpiredBurnerNoteIfNeeded() {
+        context.dataStore.edit { prefs ->
+            val updatedAt = prefs[Keys.BURNER_NOTE_UPDATED_AT] ?: 0L
+            val now = System.currentTimeMillis()
+            val twentyFourHoursMs = 24 * 3600_000L
+            if (updatedAt > 0L && (now - updatedAt) >= twentyFourHoursMs) {
+                prefs[Keys.BURNER_NOTE_TEXT] = ""
+                prefs[Keys.BURNER_NOTE_UPDATED_AT] = 0L
+            }
+        }
     }
 
     suspend fun markDefaultsInitialized() {

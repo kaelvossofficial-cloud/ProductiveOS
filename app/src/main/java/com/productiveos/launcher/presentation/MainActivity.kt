@@ -45,6 +45,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.productiveos.launcher.data.preferences.LauncherThemeOption
 import com.productiveos.launcher.data.repository.WhisperItem
 import com.productiveos.launcher.presentation.components.AppActionBottomSheet
+import com.productiveos.launcher.presentation.components.BurnerNoteOverlay
+import com.productiveos.launcher.presentation.components.MicroLogJournalSheet
+import com.productiveos.launcher.presentation.components.QuantumClipSheet
 import com.productiveos.launcher.presentation.components.SwapPinnedAppBottomSheet
 import com.productiveos.launcher.presentation.screens.MindfulFrictionOverlay
 import com.productiveos.launcher.presentation.screens.SearchDrawerScreen
@@ -81,10 +84,22 @@ class MainActivity : ComponentActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (viewModel.frictionTargetApp.value != null) {
-                        viewModel.dismissFrictionOverlay()
-                    } else if (viewModel.currentScreen.value != LauncherScreen.ZEN_HOME) {
-                        viewModel.returnToHome()
+                    when {
+                        viewModel.frictionTargetApp.value != null -> {
+                            viewModel.dismissFrictionOverlay()
+                        }
+                        viewModel.isBurnerNoteOpen.value -> {
+                            viewModel.closeBurnerNote()
+                        }
+                        viewModel.isQuantumClipOpen.value -> {
+                            viewModel.closeQuantumClipVault()
+                        }
+                        viewModel.isMicroLogOpen.value -> {
+                            viewModel.closeMicroLogJournal()
+                        }
+                        viewModel.currentScreen.value != LauncherScreen.ZEN_HOME -> {
+                            viewModel.returnToHome()
+                        }
                     }
                 }
             }
@@ -117,6 +132,14 @@ class MainActivity : ComponentActivity() {
             val swapTargetApp by viewModel.swapTargetApp.collectAsStateWithLifecycle()
             val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
             val omniResult by viewModel.omniSearchResult.collectAsStateWithLifecycle()
+            val activeFocusSound by viewModel.activeFocusSound.collectAsStateWithLifecycle()
+            val recentClips by viewModel.recentClips.collectAsStateWithLifecycle()
+            val microLogs by viewModel.microLogs.collectAsStateWithLifecycle()
+            val weeklyAwareness by viewModel.weeklyAwareness.collectAsStateWithLifecycle()
+            val isQuantumClipOpen by viewModel.isQuantumClipOpen.collectAsStateWithLifecycle()
+            val quantumClipFilter by viewModel.quantumClipFilter.collectAsStateWithLifecycle()
+            val isMicroLogOpen by viewModel.isMicroLogOpen.collectAsStateWithLifecycle()
+            val isBurnerNoteOpen by viewModel.isBurnerNoteOpen.collectAsStateWithLifecycle()
 
             // BLOCK 1, ITEM 1: System Bar Contrast & Stealth Mode Fix
             LaunchedEffect(effectiveTheme, settings.statusBarStealth) {
@@ -185,6 +208,7 @@ class MainActivity : ComponentActivity() {
                                     pinnedApps = pinnedApps,
                                     telemetry = telemetry,
                                     whisperItem = whisperItem,
+                                    activeFocusSound = activeFocusSound,
                                     settings = settings,
                                     isDefaultLauncher = isDefaultLauncher,
                                     onSetDefaultLauncherClick = requestDefaultHome,
@@ -226,6 +250,18 @@ class MainActivity : ComponentActivity() {
                                                 viewModel.nextWhisper()
                                             }
                                         }
+                                    },
+                                    onToggleFocusSound = {
+                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        viewModel.triggerFocusSound(null)
+                                    },
+                                    onOpenBurnerNote = {
+                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        viewModel.openBurnerNote()
+                                    },
+                                    onOpenQuantumClip = {
+                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        viewModel.openQuantumClipVault()
                                     },
                                     onAppClick = { app ->
                                         SystemLauncherHelper.performGlowAppOpenHaptic(context)
@@ -379,6 +415,21 @@ class MainActivity : ComponentActivity() {
                                                 SystemLauncherHelper.startNativeTimer(context, result.minutes)
                                                 viewModel.returnToHome()
                                             }
+                                            is OmniSearchResult.QuantumClipCommand -> {
+                                                viewModel.openQuantumClipVault(result.filterQuery)
+                                            }
+                                            is OmniSearchResult.FocusAudioCommand -> {
+                                                viewModel.triggerFocusSound(result.mode)
+                                            }
+                                            is OmniSearchResult.MicroLogCapture -> {
+                                                viewModel.captureMicroLogFromOmni(result.thought)
+                                            }
+                                            is OmniSearchResult.OpenMicroLogVault -> {
+                                                viewModel.openMicroLogJournal()
+                                            }
+                                            is OmniSearchResult.OpenBurnerNote -> {
+                                                viewModel.openBurnerNote()
+                                            }
                                         }
                                     },
                                     onCloseDrawer = {
@@ -396,6 +447,8 @@ class MainActivity : ComponentActivity() {
                                     isDefaultLauncher = isDefaultLauncher,
                                     pinnedApps = pinnedApps,
                                     hiddenApps = hiddenApps,
+                                    weeklyAwareness = weeklyAwareness,
+                                    activeFocusSound = activeFocusSound,
                                     onBackToHome = { viewModel.returnToHome() },
                                     onSetDefaultLauncher = requestDefaultHome,
                                     onSwitchSystemLauncher = {
@@ -415,6 +468,10 @@ class MainActivity : ComponentActivity() {
                                     onOmniSearchToolsChanged = { viewModel.setOmniSearchToolsEnabled(it) },
                                     onAutoDayNightThemeChanged = { viewModel.setAutoDayNightTheme(it) },
                                     onSyncWallpaperClicked = { viewModel.syncWallpapersWithCurrentTheme() },
+                                    onOpenQuantumClip = { viewModel.openQuantumClipVault() },
+                                    onOpenMicroLog = { viewModel.openMicroLogJournal() },
+                                    onOpenBurnerNote = { viewModel.openBurnerNote() },
+                                    onStartFocusSound = { mode -> viewModel.triggerFocusSound(mode) },
                                     onMovePinnedApp = { app, moveUp ->
                                         viewModel.movePinnedOrder(app, moveUp)
                                     },
@@ -437,21 +494,106 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Screen 3: Mindful Friction Interstitial Overlay
+                    // Screen 3: Mindful Friction Interstitial Overlay (with PathCheck Intent Trigger)
                     val activeFrictionApp = frictionTargetApp
                     if (activeFrictionApp != null) {
                         MindfulFrictionOverlay(
                             targetApp = activeFrictionApp,
                             totalSeconds = settings.frictionSeconds,
-                            onCancelAndReturnHome = {
+                            onCancelAndReturnHome = { triggerReason ->
                                 SystemLauncherHelper.performSubtleHaptic(context)
-                                viewModel.dismissFrictionOverlay()
+                                viewModel.dismissFrictionOverlay(triggerReason)
                             },
-                            onContinueToApp = {
+                            onContinueToApp = { triggerReason ->
                                 SystemLauncherHelper.performGlowAppOpenHaptic(context)
-                                viewModel.confirmAndLaunchApp(activeFrictionApp) { pkg ->
+                                viewModel.confirmAndLaunchApp(activeFrictionApp, triggerReason) { pkg ->
                                     SystemLauncherHelper.launchPackage(context, pkg)
                                 }
+                            }
+                        )
+                    }
+
+                    // Micro-App 1: Quantum Clip (Zero-Click Clipboard Vault)
+                    if (isQuantumClipOpen) {
+                        QuantumClipSheet(
+                            clips = recentClips,
+                            initialFilter = quantumClipFilter,
+                            onDismiss = { viewModel.closeQuantumClipVault() },
+                            onCopyClip = { content ->
+                                SystemLauncherHelper.copyToClipboard(context, "Quantum Clip", content)
+                                viewModel.closeQuantumClipVault()
+                            },
+                            onShareClip = { content ->
+                                runCatching {
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, content)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(shareIntent, "Share Clip").apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                }
+                            },
+                            onDeleteClip = { id ->
+                                viewModel.deleteClip(id)
+                            },
+                            onClearAll = {
+                                viewModel.clearAllClips()
+                            }
+                        )
+                    }
+
+                    // Micro-App 3: Micro-Log (Second-Brain Capture & Inbox.md Journal)
+                    if (isMicroLogOpen) {
+                        MicroLogJournalSheet(
+                            logs = microLogs,
+                            onDismiss = { viewModel.closeMicroLogJournal() },
+                            onAddLog = { thought ->
+                                viewModel.captureMicroLogFromOmni(thought)
+                            },
+                            onCopyLog = { text ->
+                                SystemLauncherHelper.copyToClipboard(context, "Micro-Log", text)
+                            },
+                            onDeleteLog = { id ->
+                                viewModel.deleteMicroLog(id)
+                            },
+                            onExportMarkdown = {
+                                viewModel.shareMicroLogMarkdown { mdContent ->
+                                    runCatching {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/markdown"
+                                            putExtra(Intent.EXTRA_SUBJECT, "ProductiveOS Inbox.md")
+                                            putExtra(Intent.EXTRA_TEXT, mdContent)
+                                        }
+                                        context.startActivity(
+                                            Intent.createChooser(shareIntent, "Export Inbox.md").apply {
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    // Micro-App 4: Burner Notes (Ephemeral 24-Hour Scratchpad)
+                    if (isBurnerNoteOpen) {
+                        BurnerNoteOverlay(
+                            noteText = settings.burnerNoteText,
+                            updatedAtMillis = settings.burnerNoteUpdatedAt,
+                            onNoteChange = { newText ->
+                                viewModel.updateBurnerNoteText(newText)
+                            },
+                            onCopyNote = { text ->
+                                SystemLauncherHelper.copyToClipboard(context, "Burner Note", text)
+                            },
+                            onClearNote = {
+                                viewModel.updateBurnerNoteText("")
+                            },
+                            onClose = {
+                                viewModel.closeBurnerNote()
                             }
                         )
                     }

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.productiveos.launcher.data.local.AppEntity
+import com.productiveos.launcher.data.local.ClipEntity
+import com.productiveos.launcher.data.local.MicroLogEntity
 import com.productiveos.launcher.data.preferences.LauncherPreferencesRepository
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.LauncherThemeOption
@@ -11,9 +13,13 @@ import com.productiveos.launcher.data.preferences.TextAlignmentOption
 import com.productiveos.launcher.data.preferences.TypographyStyleOption
 import com.productiveos.launcher.data.repository.AppRepository
 import com.productiveos.launcher.data.repository.DailyTelemetry
+import com.productiveos.launcher.data.repository.MicroOsRepository
 import com.productiveos.launcher.data.repository.UsageStatsHelper
+import com.productiveos.launcher.data.repository.WeeklyAwarenessSummary
 import com.productiveos.launcher.data.repository.WhisperEngine
 import com.productiveos.launcher.data.repository.WhisperItem
+import com.productiveos.launcher.util.FocusAudioGenerator
+import com.productiveos.launcher.util.FocusSoundMode
 import com.productiveos.launcher.util.OmniSearchEvaluator
 import com.productiveos.launcher.util.OmniSearchResult
 import com.productiveos.launcher.util.SystemLauncherHelper
@@ -42,7 +48,9 @@ class LauncherViewModel @Inject constructor(
     private val appRepository: AppRepository,
     private val preferencesRepository: LauncherPreferencesRepository,
     private val usageStatsHelper: UsageStatsHelper,
-    private val whisperEngine: WhisperEngine
+    private val whisperEngine: WhisperEngine,
+    private val microOsRepository: MicroOsRepository,
+    private val focusAudioGenerator: FocusAudioGenerator
 ) : ViewModel() {
 
     private val _currentScreen = MutableStateFlow(LauncherScreen.ZEN_HOME)
@@ -60,6 +68,18 @@ class LauncherViewModel @Inject constructor(
     private val _swapTargetApp = MutableStateFlow<AppEntity?>(null)
     val swapTargetApp: StateFlow<AppEntity?> = _swapTargetApp.asStateFlow()
 
+    private val _isQuantumClipOpen = MutableStateFlow(false)
+    val isQuantumClipOpen: StateFlow<Boolean> = _isQuantumClipOpen.asStateFlow()
+
+    private val _quantumClipFilter = MutableStateFlow("")
+    val quantumClipFilter: StateFlow<String> = _quantumClipFilter.asStateFlow()
+
+    private val _isMicroLogOpen = MutableStateFlow(false)
+    val isMicroLogOpen: StateFlow<Boolean> = _isMicroLogOpen.asStateFlow()
+
+    private val _isBurnerNoteOpen = MutableStateFlow(false)
+    val isBurnerNoteOpen: StateFlow<Boolean> = _isBurnerNoteOpen.asStateFlow()
+
     private val _dailyTelemetry = MutableStateFlow(DailyTelemetry())
     val dailyTelemetry: StateFlow<DailyTelemetry> = _dailyTelemetry.asStateFlow()
 
@@ -70,6 +90,28 @@ class LauncherViewModel @Inject constructor(
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
     val currentWhisper: StateFlow<WhisperItem> = whisperEngine.currentWhisper
+    val activeFocusSound: StateFlow<FocusSoundMode?> = focusAudioGenerator.activeMode
+
+    val recentClips: StateFlow<List<ClipEntity>> = microOsRepository.recentClipsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
+    val microLogs: StateFlow<List<MicroLogEntity>> = microOsRepository.microLogsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
+    val weeklyAwareness: StateFlow<WeeklyAwarenessSummary> = microOsRepository.observeWeeklyAwareness()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = WeeklyAwarenessSummary()
+        )
 
     val settingsState: StateFlow<LauncherSettings> = preferencesRepository.settingsFlow
         .stateIn(
@@ -84,9 +126,9 @@ class LauncherViewModel @Inject constructor(
         val settings = settingsArray[0]
         if (settings.autoDayNightTheme) {
             val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-            if (hour in 6..16) { // 6:00 AM to 4:59 PM -> Light Theme
+            if (hour in 6..16) {
                 LauncherThemeOption.WARM_STONE
-            } else { // 5:00 PM to 5:59 AM -> Night Theme
+            } else {
                 LauncherThemeOption.OLED_BLACK
             }
         } else {
@@ -145,12 +187,15 @@ class LauncherViewModel @Inject constructor(
     )
 
     init {
+        microOsRepository.startClipboardVaultListener()
         refreshAllState()
     }
 
     fun refreshAllState() {
         viewModelScope.launch {
             _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
+            preferencesRepository.purgeExpiredBurnerNoteIfNeeded()
+            microOsRepository.captureCurrentPrimaryClip()
             appRepository.syncInstalledApps()
             _dailyTelemetry.value = usageStatsHelper.queryTodayTelemetry()
             whisperEngine.refreshWhisper()
@@ -171,6 +216,9 @@ class LauncherViewModel @Inject constructor(
         _selectedContextApp.value = null
         _swapTargetApp.value = null
         _frictionTargetApp.value = null
+        _isQuantumClipOpen.value = false
+        _isMicroLogOpen.value = false
+        _isBurnerNoteOpen.value = false
         _currentScreen.value = LauncherScreen.ZEN_HOME
         viewModelScope.launch {
             _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
@@ -208,24 +256,140 @@ class LauncherViewModel @Inject constructor(
         if (app.isFrictionEnabled && settings.mindfulFrictionEnabled) {
             _frictionTargetApp.value = app
         } else {
-            confirmAndLaunchApp(app, executeSystemLaunch)
+            confirmAndLaunchApp(app, null, executeSystemLaunch)
         }
     }
 
-    fun confirmAndLaunchApp(app: AppEntity, executeSystemLaunch: (String) -> Unit) {
+    fun confirmAndLaunchApp(
+        app: AppEntity,
+        intentReason: String? = null,
+        executeSystemLaunch: (String) -> Unit
+    ) {
         _frictionTargetApp.value = null
         _selectedContextApp.value = null
         _searchQuery.value = ""
         _currentScreen.value = LauncherScreen.ZEN_HOME
         viewModelScope.launch {
+            if (intentReason != null) {
+                microOsRepository.recordPathCheckChoice(
+                    packageName = app.packageName,
+                    appName = app.displayName,
+                    intentReason = intentReason,
+                    proceeded = true
+                )
+            }
             appRepository.recordAppLaunch(app.packageName)
         }
         executeSystemLaunch(app.packageName)
     }
 
-    fun dismissFrictionOverlay() {
+    fun dismissFrictionOverlay(intentReason: String = "Habit") {
+        val target = _frictionTargetApp.value
+        if (target != null) {
+            viewModelScope.launch {
+                microOsRepository.recordPathCheckChoice(
+                    packageName = target.packageName,
+                    appName = target.displayName,
+                    intentReason = intentReason,
+                    proceeded = false
+                )
+            }
+        }
         _frictionTargetApp.value = null
         _currentScreen.value = LauncherScreen.ZEN_HOME
+    }
+
+    // Micro-OS 1: Quantum Clip
+    fun openQuantumClipVault(initialFilter: String = "") {
+        microOsRepository.captureCurrentPrimaryClip()
+        _quantumClipFilter.value = initialFilter
+        _isQuantumClipOpen.value = true
+    }
+
+    fun closeQuantumClipVault() {
+        _isQuantumClipOpen.value = false
+    }
+
+    fun deleteClip(id: Long) {
+        viewModelScope.launch {
+            microOsRepository.deleteClip(id)
+        }
+    }
+
+    fun clearAllClips() {
+        viewModelScope.launch {
+            microOsRepository.clearAllClips()
+            showTemporaryMessage("Quantum Clip vault cleared")
+        }
+    }
+
+    // Micro-OS 2: Focus Anchor
+    fun triggerFocusSound(mode: FocusSoundMode?) {
+        if (mode == null) {
+            focusAudioGenerator.stopSound()
+            showTemporaryMessage("Focus Anchor stopped")
+        } else {
+            focusAudioGenerator.startSound(mode)
+            showTemporaryMessage("♪ Playing Focus Anchor: ${mode.label}")
+        }
+        _searchQuery.value = ""
+        _currentScreen.value = LauncherScreen.ZEN_HOME
+    }
+
+    fun toggleFocusSoundOnHome() {
+        focusAudioGenerator.toggleOrCycleSound()
+    }
+
+    // Micro-OS 3: Micro-Log
+    fun captureMicroLogFromOmni(thought: String) {
+        viewModelScope.launch {
+            val timeFormatted = microOsRepository.appendMicroLog(thought)
+            _searchQuery.value = ""
+            showTemporaryMessage("✓ Saved to Journal ($timeFormatted)")
+        }
+    }
+
+    fun openMicroLogJournal() {
+        _isMicroLogOpen.value = true
+    }
+
+    fun closeMicroLogJournal() {
+        _isMicroLogOpen.value = false
+    }
+
+    fun deleteMicroLog(id: Long) {
+        viewModelScope.launch {
+            microOsRepository.deleteMicroLog(id)
+        }
+    }
+
+    fun shareMicroLogMarkdown(onShareText: (String) -> Unit) {
+        viewModelScope.launch {
+            val md = microOsRepository.readFullMarkdownJournal()
+            if (md.isNotBlank()) {
+                onShareText(md)
+            } else {
+                showTemporaryMessage("Journal is empty")
+            }
+        }
+    }
+
+    // Micro-OS 4: Burner Notes
+    fun openBurnerNote() {
+        viewModelScope.launch {
+            preferencesRepository.purgeExpiredBurnerNoteIfNeeded()
+            _isBurnerNoteOpen.value = true
+        }
+    }
+
+    fun closeBurnerNote() {
+        _isBurnerNoteOpen.value = false
+    }
+
+    fun updateBurnerNoteText(text: String) {
+        viewModelScope.launch {
+            preferencesRepository.updateBurnerNote(text)
+        }
     }
 
     fun openAppContextSheet(app: AppEntity) {
@@ -282,7 +446,7 @@ class LauncherViewModel @Inject constructor(
             appRepository.setFrictionEnabled(app.packageName, nextState)
             _selectedContextApp.value = null
             val status = if (nextState) "enabled" else "disabled"
-            showTemporaryMessage("Mindful friction $status for ${app.displayName.lowercase()}")
+            showTemporaryMessage("PathCheck gate $status for ${app.displayName.lowercase()}")
         }
     }
 
@@ -396,18 +560,6 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
-    fun setCanvasSwipeLeftPkg(pkg: String) {
-        viewModelScope.launch {
-            preferencesRepository.setCanvasSwipeLeftPkg(pkg)
-        }
-    }
-
-    fun setCanvasSwipeRightPkg(pkg: String) {
-        viewModelScope.launch {
-            preferencesRepository.setCanvasSwipeRightPkg(pkg)
-        }
-    }
-
     fun syncWallpapersWithCurrentTheme() {
         viewModelScope.launch {
             val isLight = effectiveTheme.value == LauncherThemeOption.WARM_STONE
@@ -430,7 +582,7 @@ class LauncherViewModel @Inject constructor(
         _statusMessage.value = null
     }
 
-    private fun showTemporaryMessage(msg: String) {
+    fun showTemporaryMessage(msg: String) {
         _statusMessage.value = msg
     }
 }

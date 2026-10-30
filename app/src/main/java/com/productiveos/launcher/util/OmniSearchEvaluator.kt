@@ -25,6 +25,29 @@ sealed class OmniSearchResult {
         val minutes: Int,
         val label: String
     ) : OmniSearchResult()
+
+    data class QuantumClipCommand(
+        val filterQuery: String,
+        val label: String
+    ) : OmniSearchResult()
+
+    data class FocusAudioCommand(
+        val mode: FocusSoundMode?, // null means stop
+        val label: String
+    ) : OmniSearchResult()
+
+    data class MicroLogCapture(
+        val thought: String,
+        val label: String
+    ) : OmniSearchResult()
+
+    data class OpenMicroLogVault(
+        val label: String = "open micro-log journal (inbox.md) →"
+    ) : OmniSearchResult()
+
+    data class OpenBurnerNote(
+        val label: String = "open 24h burner scratchpad →"
+    ) : OmniSearchResult()
 }
 
 object OmniSearchEvaluator {
@@ -34,8 +57,62 @@ object OmniSearchEvaluator {
     fun evaluate(rawInput: String): OmniSearchResult? {
         val trimmed = rawInput.trim()
         if (trimmed.isEmpty()) return null
+        val lower = trimmed.lowercase()
 
-        // 1. Bang command: ? search query
+        // 1. Micro-App 1: Quantum Clip (`c/` or `clips`)
+        if (lower.startsWith("c/") || lower == "clips" || lower == "clip") {
+            val subQuery = if (lower.startsWith("c/")) trimmed.substring(2).trim() else ""
+            val label = if (subQuery.isEmpty()) {
+                "quantum clip · open clipboard vault →"
+            } else {
+                "quantum clip · filter \"$subQuery\" →"
+            }
+            return OmniSearchResult.QuantumClipCommand(filterQuery = subQuery, label = label)
+        }
+
+        // 2. Micro-App 2: Focus Anchor (`focus rain`, `focus cafe`, `focus alpha`, `focus stop`)
+        if (lower.startsWith("focus")) {
+            val arg = lower.removePrefix("focus").trim()
+            return when {
+                arg == "stop" || arg == "off" -> OmniSearchResult.FocusAudioCommand(
+                    mode = null,
+                    label = "♪ stop focus anchor audio"
+                )
+                arg.contains("cafe") || arg.contains("brown") -> OmniSearchResult.FocusAudioCommand(
+                    mode = FocusSoundMode.CAFE_BROWN,
+                    label = "♪ play focus anchor: warm brownian noise"
+                )
+                arg.contains("alpha") || arg.contains("binaural") || arg.contains("flow") -> OmniSearchResult.FocusAudioCommand(
+                    mode = FocusSoundMode.BINAURAL_ALPHA,
+                    label = "♪ play focus anchor: alpha binaural flow"
+                )
+                else -> OmniSearchResult.FocusAudioCommand(
+                    mode = FocusSoundMode.RAIN,
+                    label = "♪ play focus anchor: rainfall acoustic stream"
+                )
+            }
+        }
+
+        // 3. Micro-App 3: Micro-Log (`log [thought]` or `logs` / `log/`)
+        if (lower == "logs" || lower == "log/" || lower == "journal") {
+            return OmniSearchResult.OpenMicroLogVault()
+        }
+        if (lower.startsWith("log ")) {
+            val thought = trimmed.substring(4).trim()
+            if (thought.isNotEmpty()) {
+                return OmniSearchResult.MicroLogCapture(
+                    thought = thought,
+                    label = "✓ save to micro-log: \"$thought\""
+                )
+            }
+        }
+
+        // 4. Micro-App 4: Burner Notes (`burner` or `scratch`)
+        if (lower == "burner" || lower == "scratch" || lower == "scratchpad") {
+            return OmniSearchResult.OpenBurnerNote()
+        }
+
+        // 5. Bang command: ? search query
         if (trimmed.startsWith("?")) {
             val query = trimmed.removePrefix("?").trim()
             if (query.isNotEmpty()) {
@@ -46,7 +123,7 @@ object OmniSearchEvaluator {
             }
         }
 
-        // 2. Bang command: @ maps location
+        // 6. Bang command: @ maps location
         if (trimmed.startsWith("@")) {
             val query = trimmed.removePrefix("@").trim()
             if (query.isNotEmpty()) {
@@ -57,7 +134,7 @@ object OmniSearchEvaluator {
             }
         }
 
-        // 3. Bang command: t [minutes] or timer [minutes]
+        // 7. Bang command: t [minutes] or timer [minutes]
         val timerPattern = Pattern.compile("^(?:t|timer)\\s*(\\d+)(?:m|min)?$", Pattern.CASE_INSENSITIVE)
         val timerMatcher = timerPattern.matcher(trimmed)
         if (timerMatcher.matches()) {
@@ -70,7 +147,7 @@ object OmniSearchEvaluator {
             }
         }
 
-        // 4. Inline Math evaluation
+        // 8. Inline Math evaluation
         if (containsMathOperators(trimmed)) {
             val mathRes = evaluateMathExpression(trimmed)
             if (mathRes != null) {
@@ -100,7 +177,6 @@ object OmniSearchEvaluator {
                 .replace("X", "*")
                 .replace("÷", "/")
 
-            // Handle percentage: e.g. 50% * 200 or 15%
             sanitized = sanitized.replace(Regex("(\\d+(?:\\.\\d+)?)%")) { match ->
                 val num = match.groupValues[1].toDoubleOrNull() ?: return@replace match.value
                 (num / 100.0).toString()
@@ -132,7 +208,6 @@ object OmniSearchEvaluator {
                     continue
                 }
                 c == '-' -> {
-                    // Check if unary minus
                     val isUnary = tokens.isEmpty() || tokens.last() in listOf("+", "-", "*", "/", "^", "(")
                     if (isUnary) {
                         val sb = StringBuilder("-")
@@ -175,7 +250,7 @@ object OmniSearchEvaluator {
                     while (ops.isNotEmpty() && ops.peek() != "(") {
                         output.add(ops.pop())
                     }
-                    if (ops.isNotEmpty()) ops.pop() // Discard '('
+                    if (ops.isNotEmpty()) ops.pop()
                 }
                 else -> {
                     while (ops.isNotEmpty() && precedence(ops.peek()) >= precedence(token)) {
