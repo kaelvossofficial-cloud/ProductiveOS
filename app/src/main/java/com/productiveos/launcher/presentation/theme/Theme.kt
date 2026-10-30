@@ -1,5 +1,13 @@
 package com.productiveos.launcher.presentation.theme
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -7,14 +15,27 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.productiveos.launcher.data.preferences.LauncherThemeOption
 import com.productiveos.launcher.data.preferences.TypographyStyleOption
+import kotlinx.coroutines.launch
 
 @Immutable
 data class ProductiveOSPalette(
@@ -26,6 +47,7 @@ data class ProductiveOSPalette(
     val mutedText: Color,
     val borderSubtle: Color,
     val accentDot: Color,
+    val glowColor: Color,
     val isLight: Boolean
 )
 
@@ -38,6 +60,7 @@ val OledBlackPalette = ProductiveOSPalette(
     mutedText = Color(0xFF525258),
     borderSubtle = Color(0xFF1F1F24),
     accentDot = Color(0xFFE5E5EA),
+    glowColor = Color(0x66FFFFFF),
     isLight = false
 )
 
@@ -50,6 +73,7 @@ val SlateGrayPalette = ProductiveOSPalette(
     mutedText = Color(0xFF636366),
     borderSubtle = Color(0xFF2C2C2E),
     accentDot = Color(0xFFD1D1D6),
+    glowColor = Color(0x55E5E5EA),
     isLight = false
 )
 
@@ -62,12 +86,80 @@ val WarmStonePalette = ProductiveOSPalette(
     mutedText = Color(0xFF8E8E87),
     borderSubtle = Color(0xFFD6D6CE),
     accentDot = Color(0xFF1C1C1E),
+    glowColor = Color(0x55141413),
     isLight = true
 )
 
 val LocalProductiveOSPalette = staticCompositionLocalOf { OledBlackPalette }
 val LocalProductiveOSFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.SansSerif }
 val LocalProductiveOSFontScale = staticCompositionLocalOf { 1.0f }
+
+@Composable
+fun Modifier.tactilePress(
+    enabled: Boolean = true,
+    minTouchHeight: Boolean = true,
+    enableGlow: Boolean = true,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
+): Modifier {
+    if (!enabled) return this
+
+    val haptic = LocalHapticFeedback.current
+    val palette = LocalProductiveOSPalette.current
+    val coroutineScope = rememberCoroutineScope()
+    var isPressed by remember { mutableStateOf(false) }
+    val glowAnim = remember { Animatable(0f) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "tactilePressScale"
+    )
+
+    return this
+        .then(if (minTouchHeight) Modifier.defaultMinSize(minHeight = 48.dp) else Modifier)
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .drawBehind {
+            if (enableGlow && glowAnim.value > 0.01f) {
+                drawCircle(
+                    color = palette.glowColor.copy(alpha = (glowAnim.value * 0.45f).coerceIn(0f, 1f)),
+                    radius = size.maxDimension * (0.6f + (1f - glowAnim.value) * 0.4f)
+                )
+            }
+        }
+        .pointerInput(enabled) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    val success = tryAwaitRelease()
+                    isPressed = false
+                },
+                onLongPress = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick?.invoke()
+                },
+                onTap = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (enableGlow) {
+                        coroutineScope.launch {
+                            glowAnim.snapTo(1f)
+                            glowAnim.animateTo(
+                                targetValue = 0f,
+                                animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                            )
+                        }
+                    }
+                    onClick()
+                }
+            )
+        }
+}
 
 @Composable
 fun ProductiveOSTheme(
@@ -164,4 +256,3 @@ fun ProductiveOSTheme(
         )
     }
 }
-

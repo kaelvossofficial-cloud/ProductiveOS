@@ -281,6 +281,11 @@ class AppRepository @Inject constructor(
             appDao.updateFriction(packageName, enabled)
         }
 
+    suspend fun setAppSwipeAction(packageName: String, swipePackage: String?) =
+        withContext(Dispatchers.IO) {
+            appDao.updateSwipeAction(packageName, swipePackage)
+        }
+
     suspend fun setAppHidden(packageName: String, hidden: Boolean) =
         withContext(Dispatchers.IO) {
             appDao.updateHidden(packageName, hidden)

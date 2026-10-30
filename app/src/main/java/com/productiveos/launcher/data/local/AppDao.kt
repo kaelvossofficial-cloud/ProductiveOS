@@ -74,5 +74,7 @@ interface AppDao {
 
     @Query("UPDATE apps SET launchCount = launchCount + 1, lastUsedTime = :timestamp WHERE packageName = :packageName")
     suspend fun incrementLaunchCount(packageName: String, timestamp: Long)
-}
 
+    @Query("UPDATE apps SET swipeActionPackage = :swipePackage WHERE packageName = :packageName")
+    suspend fun updateSwipeAction(packageName: String, swipePackage: String?)
+}

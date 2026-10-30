@@ -1,12 +1,15 @@
 package com.productiveos.launcher.presentation.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,45 +28,54 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.productiveos.launcher.data.local.AppEntity
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
 import com.productiveos.launcher.data.repository.DailyTelemetry
+import com.productiveos.launcher.data.repository.WhisperItem
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
+import com.productiveos.launcher.presentation.theme.tactilePress
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ZenHomeScreen(
     pinnedApps: List<AppEntity>,
     telemetry: DailyTelemetry,
+    whisperItem: WhisperItem,
     settings: LauncherSettings,
     isDefaultLauncher: Boolean,
     onSetDefaultLauncherClick: () -> Unit,
     onClockClick: () -> Unit,
     onDateClick: () -> Unit,
     onTelemetryPillClick: () -> Unit,
+    onWhisperClick: () -> Unit,
     onAppClick: (AppEntity) -> Unit,
     onAppLongClick: (AppEntity) -> Unit,
+    onAppSwipeRight: (AppEntity) -> Unit,
     onSwipeUpSearch: () -> Unit,
     onSwipeDownNotifications: () -> Unit,
+    onCanvasSwipeLeft: () -> Unit,
+    onCanvasSwipeRight: () -> Unit,
     onDoubleTapEmptySpace: () -> Unit,
     onLongPressEmptySpace: () -> Unit
 ) {
     val palette = LocalProductiveOSPalette.current
+    val haptic = LocalHapticFeedback.current
 
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -93,7 +105,8 @@ fun ZenHomeScreen(
         TextAlignmentOption.RIGHT -> TextAlign.End
     }
 
-    var accumulatedDragY by remember { mutableStateOf(0f) }
+    var totalCanvasDragX by remember { mutableFloatStateOf(0f) }
+    var totalCanvasDragY by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
@@ -105,19 +118,35 @@ fun ZenHomeScreen(
                     onLongPress = { onLongPressEmptySpace() }
                 )
             }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { accumulatedDragY = 0f },
-                    onDragEnd = {
-                        if (accumulatedDragY < -90f) {
-                            onSwipeUpSearch()
-                        } else if (accumulatedDragY > 90f) {
-                            onSwipeDownNotifications()
-                        }
-                        accumulatedDragY = 0f
+            .pointerInput(settings.swipeDownForNotifications) {
+                detectDragGestures(
+                    onDragStart = {
+                        totalCanvasDragX = 0f
+                        totalCanvasDragY = 0f
                     },
-                    onVerticalDrag = { _, dragAmount ->
-                        accumulatedDragY += dragAmount
+                    onDragEnd = {
+                        val absX = kotlin.math.abs(totalCanvasDragX)
+                        val absY = kotlin.math.abs(totalCanvasDragY)
+
+                        if (absY > absX && absY > 80f) {
+                            if (totalCanvasDragY < -80f) {
+                                onSwipeUpSearch()
+                            } else if (totalCanvasDragY > 80f && settings.swipeDownForNotifications) {
+                                onSwipeDownNotifications()
+                            }
+                        } else if (absX > absY && absX > 100f) {
+                            if (totalCanvasDragX < -100f) {
+                                onCanvasSwipeLeft()
+                            } else if (totalCanvasDragX > 100f) {
+                                onCanvasSwipeRight()
+                            }
+                        }
+                        totalCanvasDragX = 0f
+                        totalCanvasDragY = 0f
+                    },
+                    onDrag = { _, dragAmount ->
+                        totalCanvasDragX += dragAmount.x
+                        totalCanvasDragY += dragAmount.y
                     }
                 )
             }
@@ -196,14 +225,44 @@ fun ZenHomeScreen(
                         color = palette.secondaryText
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // BLOCK 1, ITEM 2: Editorial Contextual Whisper Header
+                AnimatedContent(
+                    targetState = whisperItem,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "WhisperTicker"
+                ) { item ->
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable(onClick = onWhisperClick)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "·",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.mutedText
+                        )
+                        Text(
+                            text = item.text.lowercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.mutedText,
+                            textAlign = textAlign
+                        )
+                    }
+                }
             }
 
             // Center / Lower Third Pinned Essentials (4 to 6 Text Items)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                    .padding(vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = horizontalAlignment
             ) {
                 if (pinnedApps.isEmpty()) {
@@ -216,29 +275,58 @@ fun ZenHomeScreen(
                     )
                 } else {
                     pinnedApps.take(6).forEach { app ->
-                        Row(
+                        var rowDragX by remember(app.packageName) { mutableFloatStateOf(0f) }
+
+                        Box(
                             modifier = Modifier
-                                .combinedClickable(
-                                    onClick = { onAppClick(app) },
-                                    onLongClick = { onAppLongClick(app) }
-                                )
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                .fillMaxWidth()
+                                .pointerInput(app.packageName) {
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { rowDragX = 0f },
+                                        onDragEnd = {
+                                            if (rowDragX > 80f) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                onAppSwipeRight(app)
+                                            }
+                                            rowDragX = 0f
+                                        },
+                                        onHorizontalDrag = { _, dragAmount ->
+                                            rowDragX += dragAmount
+                                        }
+                                    )
+                                }
                         ) {
-                            Text(
-                                text = app.displayName.lowercase(),
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = palette.primaryText,
-                                textAlign = textAlign
-                            )
-                            if (app.isFrictionEnabled) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(5.dp)
-                                        .clip(CircleShape)
-                                        .background(palette.mutedText)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .tactilePress(
+                                        minTouchHeight = true,
+                                        enableGlow = true,
+                                        onClick = { onAppClick(app) },
+                                        onLongClick = { onAppLongClick(app) }
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = when (settings.textAlignment) {
+                                    TextAlignmentOption.LEFT -> Arrangement.Start
+                                    TextAlignmentOption.CENTER -> Arrangement.Center
+                                    TextAlignmentOption.RIGHT -> Arrangement.End
+                                }
+                            ) {
+                                Text(
+                                    text = app.displayName.lowercase(),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = palette.primaryText,
+                                    textAlign = textAlign
                                 )
+                                if (app.isFrictionEnabled) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(5.dp)
+                                            .clip(CircleShape)
+                                            .background(palette.mutedText)
+                                    )
+                                }
                             }
                         }
                     }
@@ -281,4 +369,3 @@ fun ZenHomeScreen(
         }
     }
 }
-

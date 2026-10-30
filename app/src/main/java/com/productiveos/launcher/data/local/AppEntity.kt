@@ -14,9 +14,9 @@ data class AppEntity(
     val isHidden: Boolean = false,
     val isFrictionEnabled: Boolean = false,
     val launchCount: Int = 0,
-    val lastUsedTime: Long = 0L
+    val lastUsedTime: Long = 0L,
+    val swipeActionPackage: String? = null
 ) {
     val displayName: String
         get() = customLabel?.takeIf { it.isNotBlank() } ?: label
 }
-

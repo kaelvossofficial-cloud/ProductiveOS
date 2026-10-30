@@ -26,6 +26,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -61,6 +64,13 @@ fun SettingsScreen(
     onAutoLaunchChanged: (Boolean) -> Unit,
     onT9SearchChanged: (Boolean) -> Unit,
     onFrictionSecondsChanged: (Int) -> Unit,
+    onMindfulFrictionEnabledChanged: (Boolean) -> Unit,
+    onStatusBarStealthChanged: (Boolean) -> Unit,
+    onBottomDockedSearchChanged: (Boolean) -> Unit,
+    onSwipeDownNotificationsChanged: (Boolean) -> Unit,
+    onOmniSearchToolsChanged: (Boolean) -> Unit,
+    onAutoDayNightThemeChanged: (Boolean) -> Unit,
+    onSyncWallpaperClicked: () -> Unit,
     onMovePinnedApp: (AppEntity, Boolean) -> Unit,
     onUnpinApp: (AppEntity) -> Unit,
     onUnhideApp: (AppEntity) -> Unit,
@@ -68,6 +78,7 @@ fun SettingsScreen(
     onUpdateVaultPasscode: (String) -> Unit
 ) {
     val palette = LocalProductiveOSPalette.current
+    val haptic = LocalHapticFeedback.current
     val scrollState = rememberScrollState()
 
     var isVaultUnlocked by remember(settings.vaultPasscode) {
@@ -77,6 +88,8 @@ fun SettingsScreen(
     var passcodeError by remember { mutableStateOf(false) }
     var isEditingVaultPasscode by remember { mutableStateOf(false) }
     var newPasscodeDraft by remember { mutableStateOf("") }
+
+    var lastSliderValue by remember { mutableFloatStateOf(settings.fontScale) }
 
     Column(
         modifier = Modifier
@@ -191,13 +204,19 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Section 5: Font Scaling
+        // Section 5: Font Scaling with haptic steps
         SectionHeader(
             title = "font scale · ${(settings.fontScale * 100).roundToInt()}%"
         )
         Slider(
             value = settings.fontScale,
-            onValueChange = onFontScaleChanged,
+            onValueChange = { newVal ->
+                if (kotlin.math.abs(newVal - lastSliderValue) > 0.04f) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    lastSliderValue = newVal
+                }
+                onFontScaleChanged(newVal)
+            },
             valueRange = 0.85f..1.30f,
             steps = 8,
             colors = SliderDefaults.colors(
@@ -207,11 +226,81 @@ fun SettingsScreen(
             )
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
-        // Section 6: Search & Mindful Friction Preferences
-        SectionHeader(title = "focus & search engine")
+        // BLOCK 4, ITEM 1: GESTURES & ERGONOMICS
+        SectionHeader(title = "gestures & ergonomics")
         Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleSettingRow(
+            title = "swipe down for notifications",
+            subtitle = "expand system notification shade by swiping down anywhere on home",
+            checked = settings.swipeDownForNotifications,
+            onCheckedChange = onSwipeDownNotificationsChanged
+        )
+
+        ToggleSettingRow(
+            title = "bottom-docked search bar",
+            subtitle = "anchor search input bar directly above the keyboard for one-hand thumb use",
+            checked = settings.bottomDockedSearch,
+            onCheckedChange = onBottomDockedSearchChanged
+        )
+
+        ToggleSettingRow(
+            title = "status bar visibility",
+            subtitle = if (settings.statusBarStealth) "stealth mode (hidden status bar)" else "visible status bar",
+            checked = !settings.statusBarStealth,
+            onCheckedChange = { visible -> onStatusBarStealthChanged(!visible) }
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // BLOCK 4, ITEM 2: MINDFUL FRICTION GATE
+        SectionHeader(title = "mindful friction gate")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleSettingRow(
+            title = "mindful breathing countdown",
+            subtitle = "require an intentional breathing pause before opening distracting apps",
+            checked = settings.mindfulFrictionEnabled,
+            onCheckedChange = onMindfulFrictionEnabledChanged
+        )
+
+        if (settings.mindfulFrictionEnabled) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "breathing pause length",
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette.primaryText
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(3, 5, 10).forEach { seconds ->
+                    OptionChip(
+                        label = "${seconds}s pause",
+                        selected = settings.frictionSeconds == seconds,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onFrictionSecondsChanged(seconds) }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // BLOCK 4, ITEM 3: OMNI-SEARCH TOOLS
+        SectionHeader(title = "omni-search tools")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleSettingRow(
+            title = "inline calculator & bang commands",
+            subtitle = "evaluates math (+ - * / ^ %), ? web search, @ maps, and t 15 focus timers directly in search bar",
+            checked = settings.omniSearchToolsEnabled,
+            onCheckedChange = onOmniSearchToolsChanged
+        )
 
         ToggleSettingRow(
             title = "auto-launch single search result",
@@ -227,30 +316,31 @@ fun SettingsScreen(
             onCheckedChange = onT9SearchChanged
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "mindful friction breathing timer",
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.primaryText
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // BLOCK 4, ITEM 4: DAYLIGHT AUTO-THEME & WALLPAPER
+        SectionHeader(title = "daylight auto-theme & wallpaper")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleSettingRow(
+            title = "auto daylight / night theme",
+            subtitle = "warm stone (light) from 6:00 am to 5:00 pm, then pure oled black at night",
+            checked = settings.autoDayNightTheme,
+            onCheckedChange = onAutoDayNightThemeChanged
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ActionPillButton(
+            text = "Sync System & Lock Wallpapers to Theme",
+            isPrimary = false,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            listOf(3, 5, 10).forEach { seconds ->
-                OptionChip(
-                    label = "${seconds}s pause",
-                    selected = settings.frictionSeconds == seconds,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onFrictionSecondsChanged(seconds) }
-                )
-            }
-        }
+            onClick = onSyncWallpaperClicked
+        )
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Section 7: Pinned Essentials Ordering
+        // Section: Pinned Essentials Ordering
         SectionHeader(title = "pinned home essentials (${pinnedApps.size}/6)")
         Spacer(modifier = Modifier.height(10.dp))
         if (pinnedApps.isEmpty()) {
@@ -305,7 +395,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // Section 8: Hidden Apps Vault
+        // Section: Hidden Apps Vault
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -549,4 +639,3 @@ private fun ToggleSettingRow(
         )
     }
 }
-

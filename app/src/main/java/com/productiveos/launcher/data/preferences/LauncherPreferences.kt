@@ -42,9 +42,17 @@ data class LauncherSettings(
     val fontScale: Float = 1.0f,
     val autoLaunchSingleResult: Boolean = true,
     val enableT9Search: Boolean = true,
-    val frictionSeconds: Int = 5,
+    val frictionSeconds: Int = 3,
+    val mindfulFrictionEnabled: Boolean = true,
     val vaultPasscode: String = "",
-    val hasInitializedDefaults: Boolean = false
+    val hasInitializedDefaults: Boolean = false,
+    val statusBarStealth: Boolean = false,
+    val bottomDockedSearch: Boolean = false,
+    val swipeDownForNotifications: Boolean = true,
+    val omniSearchToolsEnabled: Boolean = true,
+    val autoDayNightTheme: Boolean = false,
+    val canvasSwipeLeftPkg: String = "",
+    val canvasSwipeRightPkg: String = ""
 )
 
 @Singleton
@@ -59,8 +67,16 @@ class LauncherPreferencesRepository @Inject constructor(
         val AUTO_LAUNCH_SINGLE = booleanPreferencesKey("auto_launch_single")
         val ENABLE_T9_SEARCH = booleanPreferencesKey("enable_t9_search")
         val FRICTION_SECONDS = intPreferencesKey("friction_seconds")
+        val MINDFUL_FRICTION_ENABLED = booleanPreferencesKey("mindful_friction_enabled")
         val VAULT_PASSCODE = stringPreferencesKey("vault_passcode")
         val HAS_INITIALIZED_DEFAULTS = booleanPreferencesKey("has_initialized_defaults")
+        val STATUS_BAR_STEALTH = booleanPreferencesKey("status_bar_stealth")
+        val BOTTOM_DOCKED_SEARCH = booleanPreferencesKey("bottom_docked_search")
+        val SWIPE_DOWN_NOTIFICATIONS = booleanPreferencesKey("swipe_down_notifications")
+        val OMNI_SEARCH_TOOLS = booleanPreferencesKey("omni_search_tools")
+        val AUTO_DAY_NIGHT_THEME = booleanPreferencesKey("auto_day_night_theme")
+        val CANVAS_SWIPE_LEFT_PKG = stringPreferencesKey("canvas_swipe_left_pkg")
+        val CANVAS_SWIPE_RIGHT_PKG = stringPreferencesKey("canvas_swipe_right_pkg")
     }
 
     val settingsFlow: Flow<LauncherSettings> = context.dataStore.data.map { prefs ->
@@ -83,9 +99,17 @@ class LauncherPreferencesRepository @Inject constructor(
             fontScale = prefs[Keys.FONT_SCALE] ?: 1.0f,
             autoLaunchSingleResult = prefs[Keys.AUTO_LAUNCH_SINGLE] ?: true,
             enableT9Search = prefs[Keys.ENABLE_T9_SEARCH] ?: true,
-            frictionSeconds = prefs[Keys.FRICTION_SECONDS] ?: 5,
+            frictionSeconds = prefs[Keys.FRICTION_SECONDS] ?: 3,
+            mindfulFrictionEnabled = prefs[Keys.MINDFUL_FRICTION_ENABLED] ?: true,
             vaultPasscode = prefs[Keys.VAULT_PASSCODE] ?: "",
-            hasInitializedDefaults = prefs[Keys.HAS_INITIALIZED_DEFAULTS] ?: false
+            hasInitializedDefaults = prefs[Keys.HAS_INITIALIZED_DEFAULTS] ?: false,
+            statusBarStealth = prefs[Keys.STATUS_BAR_STEALTH] ?: false,
+            bottomDockedSearch = prefs[Keys.BOTTOM_DOCKED_SEARCH] ?: false,
+            swipeDownForNotifications = prefs[Keys.SWIPE_DOWN_NOTIFICATIONS] ?: true,
+            omniSearchToolsEnabled = prefs[Keys.OMNI_SEARCH_TOOLS] ?: true,
+            autoDayNightTheme = prefs[Keys.AUTO_DAY_NIGHT_THEME] ?: false,
+            canvasSwipeLeftPkg = prefs[Keys.CANVAS_SWIPE_LEFT_PKG] ?: "",
+            canvasSwipeRightPkg = prefs[Keys.CANVAS_SWIPE_RIGHT_PKG] ?: ""
         )
     }
 
@@ -131,12 +155,43 @@ class LauncherPreferencesRepository @Inject constructor(
         context.dataStore.edit { it[Keys.FRICTION_SECONDS] = seconds.coerceIn(3, 15) }
     }
 
+    suspend fun setMindfulFrictionEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.MINDFUL_FRICTION_ENABLED] = enabled }
+    }
+
     suspend fun setVaultPasscode(passcode: String) {
         context.dataStore.edit { it[Keys.VAULT_PASSCODE] = passcode }
+    }
+
+    suspend fun setStatusBarStealth(stealth: Boolean) {
+        context.dataStore.edit { it[Keys.STATUS_BAR_STEALTH] = stealth }
+    }
+
+    suspend fun setBottomDockedSearch(bottom: Boolean) {
+        context.dataStore.edit { it[Keys.BOTTOM_DOCKED_SEARCH] = bottom }
+    }
+
+    suspend fun setSwipeDownForNotifications(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SWIPE_DOWN_NOTIFICATIONS] = enabled }
+    }
+
+    suspend fun setOmniSearchToolsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.OMNI_SEARCH_TOOLS] = enabled }
+    }
+
+    suspend fun setAutoDayNightTheme(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_DAY_NIGHT_THEME] = enabled }
+    }
+
+    suspend fun setCanvasSwipeLeftPkg(pkg: String) {
+        context.dataStore.edit { it[Keys.CANVAS_SWIPE_LEFT_PKG] = pkg }
+    }
+
+    suspend fun setCanvasSwipeRightPkg(pkg: String) {
+        context.dataStore.edit { it[Keys.CANVAS_SWIPE_RIGHT_PKG] = pkg }
     }
 
     suspend fun markDefaultsInitialized() {
         context.dataStore.edit { it[Keys.HAS_INITIALIZED_DEFAULTS] = true }
     }
 }
-

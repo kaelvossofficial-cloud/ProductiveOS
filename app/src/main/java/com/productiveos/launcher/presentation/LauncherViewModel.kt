@@ -12,7 +12,12 @@ import com.productiveos.launcher.data.preferences.TypographyStyleOption
 import com.productiveos.launcher.data.repository.AppRepository
 import com.productiveos.launcher.data.repository.DailyTelemetry
 import com.productiveos.launcher.data.repository.UsageStatsHelper
+import com.productiveos.launcher.data.repository.WhisperEngine
+import com.productiveos.launcher.data.repository.WhisperItem
+import com.productiveos.launcher.util.OmniSearchEvaluator
+import com.productiveos.launcher.util.OmniSearchResult
 import com.productiveos.launcher.util.SystemLauncherHelper
+import com.productiveos.launcher.util.WallpaperHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
 
 enum class LauncherScreen {
@@ -35,7 +41,8 @@ class LauncherViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val appRepository: AppRepository,
     private val preferencesRepository: LauncherPreferencesRepository,
-    private val usageStatsHelper: UsageStatsHelper
+    private val usageStatsHelper: UsageStatsHelper,
+    private val whisperEngine: WhisperEngine
 ) : ViewModel() {
 
     private val _currentScreen = MutableStateFlow(LauncherScreen.ZEN_HOME)
@@ -62,12 +69,34 @@ class LauncherViewModel @Inject constructor(
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    val currentWhisper: StateFlow<WhisperItem> = whisperEngine.currentWhisper
+
     val settingsState: StateFlow<LauncherSettings> = preferencesRepository.settingsFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = LauncherSettings()
         )
+
+    val effectiveTheme: StateFlow<LauncherThemeOption> = combine(
+        settingsState
+    ) { settingsArray ->
+        val settings = settingsArray[0]
+        if (settings.autoDayNightTheme) {
+            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            if (hour in 6..16) { // 6:00 AM to 4:59 PM -> Light Theme
+                LauncherThemeOption.WARM_STONE
+            } else { // 5:00 PM to 5:59 AM -> Night Theme
+                LauncherThemeOption.OLED_BLACK
+            }
+        } else {
+            settings.themeOption
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = LauncherThemeOption.OLED_BLACK
+    )
 
     val visibleApps: StateFlow<List<AppEntity>> = appRepository.visibleAppsFlow
         .stateIn(
@@ -102,6 +131,19 @@ class LauncherViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    val omniSearchResult: StateFlow<OmniSearchResult?> = combine(
+        _searchQuery,
+        settingsState
+    ) { query, settings ->
+        if (settings.omniSearchToolsEnabled) {
+            OmniSearchEvaluator.evaluate(query)
+        } else null
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = null
+    )
+
     init {
         refreshAllState()
     }
@@ -111,6 +153,7 @@ class LauncherViewModel @Inject constructor(
             _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
             appRepository.syncInstalledApps()
             _dailyTelemetry.value = usageStatsHelper.queryTodayTelemetry()
+            whisperEngine.refreshWhisper()
         }
     }
 
@@ -132,6 +175,7 @@ class LauncherViewModel @Inject constructor(
         viewModelScope.launch {
             _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
             _dailyTelemetry.value = usageStatsHelper.queryTodayTelemetry()
+            whisperEngine.refreshWhisper()
         }
     }
 
@@ -145,19 +189,23 @@ class LauncherViewModel @Inject constructor(
             newQuery.trim().length > previousQuery.trim().length &&
             newQuery.trim().length >= 2
         ) {
-            val matches = appRepository.filterApps(
-                visibleApps.value,
-                newQuery,
-                settings.enableT9Search
-            )
-            if (matches.size == 1) {
-                onAutoLaunch(matches.first())
+            val omni = if (settings.omniSearchToolsEnabled) OmniSearchEvaluator.evaluate(newQuery) else null
+            if (omni == null) {
+                val matches = appRepository.filterApps(
+                    visibleApps.value,
+                    newQuery,
+                    settings.enableT9Search
+                )
+                if (matches.size == 1) {
+                    onAutoLaunch(matches.first())
+                }
             }
         }
     }
 
     fun onAppRequested(app: AppEntity, executeSystemLaunch: (String) -> Unit) {
-        if (app.isFrictionEnabled) {
+        val settings = settingsState.value
+        if (app.isFrictionEnabled && settings.mindfulFrictionEnabled) {
             _frictionTargetApp.value = app
         } else {
             confirmAndLaunchApp(app, executeSystemLaunch)
@@ -238,6 +286,14 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun setAppSwipeAction(app: AppEntity, swipePackage: String?) {
+        viewModelScope.launch {
+            appRepository.setAppSwipeAction(app.packageName, swipePackage)
+            _selectedContextApp.value = null
+            showTemporaryMessage("Swipe action updated for ${app.displayName.lowercase()}")
+        }
+    }
+
     fun setHidden(app: AppEntity, hidden: Boolean) {
         viewModelScope.launch {
             appRepository.setAppHidden(app.packageName, hidden)
@@ -298,9 +354,75 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun setMindfulFrictionEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setMindfulFrictionEnabled(enabled)
+        }
+    }
+
     fun setVaultPasscode(passcode: String) {
         viewModelScope.launch {
             preferencesRepository.setVaultPasscode(passcode)
+        }
+    }
+
+    fun setStatusBarStealth(stealth: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setStatusBarStealth(stealth)
+        }
+    }
+
+    fun setBottomDockedSearch(bottom: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setBottomDockedSearch(bottom)
+        }
+    }
+
+    fun setSwipeDownForNotifications(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setSwipeDownForNotifications(enabled)
+        }
+    }
+
+    fun setOmniSearchToolsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setOmniSearchToolsEnabled(enabled)
+        }
+    }
+
+    fun setAutoDayNightTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setAutoDayNightTheme(enabled)
+        }
+    }
+
+    fun setCanvasSwipeLeftPkg(pkg: String) {
+        viewModelScope.launch {
+            preferencesRepository.setCanvasSwipeLeftPkg(pkg)
+        }
+    }
+
+    fun setCanvasSwipeRightPkg(pkg: String) {
+        viewModelScope.launch {
+            preferencesRepository.setCanvasSwipeRightPkg(pkg)
+        }
+    }
+
+    fun syncWallpapersWithCurrentTheme() {
+        viewModelScope.launch {
+            val isLight = effectiveTheme.value == LauncherThemeOption.WARM_STONE
+            val ok = WallpaperHelper.setSolidThemeWallpaper(appContext, isLight)
+            if (ok) {
+                showTemporaryMessage("System & Lock wallpapers synced to minimalist theme")
+            } else {
+                showTemporaryMessage("Wallpaper permission required or not supported")
+            }
+        }
+    }
+
+    fun nextWhisper() {
+        viewModelScope.launch {
+            whisperEngine.refreshWhisper()
         }
     }
 
@@ -312,4 +434,3 @@ class LauncherViewModel @Inject constructor(
         _statusMessage.value = msg
     }
 }
-

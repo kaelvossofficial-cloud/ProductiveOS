@@ -1,12 +1,16 @@
 package com.productiveos.launcher.util
 
 import android.annotation.SuppressLint
+import android.app.SearchManager
 import android.app.role.RoleManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Process
@@ -16,6 +20,11 @@ import android.os.VibratorManager
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
+import android.view.KeyEvent
+import android.view.Window
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 object SystemLauncherHelper {
 
@@ -192,16 +201,96 @@ object SystemLauncherHelper {
         }
     }
 
+    fun startNativeTimer(context: Context, minutes: Int): Boolean {
+        return runCatching {
+            val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
+                putExtra(AlarmClock.EXTRA_LENGTH, minutes * 60)
+                putExtra(AlarmClock.EXTRA_MESSAGE, "ProductiveOS Focus Timer")
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        }.getOrElse {
+            openClockApp(context)
+            false
+        }
+    }
+
+    fun searchWeb(context: Context, query: String) {
+        runCatching {
+            val searchIntent = Intent(Intent.ACTION_WEB_SEARCH).apply {
+                putExtra(SearchManager.QUERY, query)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(searchIntent)
+        }.onFailure {
+            val browserIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://www.google.com/search?q=" + Uri.encode(query))
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(browserIntent)
+        }
+    }
+
+    fun openMapsSearch(context: Context, query: String) {
+        runCatching {
+            val mapsUri = Uri.parse("geo:0,0?q=" + Uri.encode(query))
+            val mapsIntent = Intent(Intent.ACTION_VIEW, mapsUri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(mapsIntent)
+        }.onFailure {
+            searchWeb(context, "maps $query")
+        }
+    }
+
+    fun toggleMediaPlayback(context: Context) {
+        runCatching {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            audioManager?.dispatchMediaKeyEvent(
+                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            )
+            audioManager?.dispatchMediaKeyEvent(
+                KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            )
+        }
+    }
+
+    fun copyToClipboard(context: Context, label: String, text: String) {
+        runCatching {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            val clip = ClipData.newPlainText(label, text)
+            clipboard?.setPrimaryClip(clip)
+        }
+    }
+
+    fun applyStatusBarVisibility(window: Window, stealthMode: Boolean) {
+        runCatching {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            if (stealthMode) {
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.statusBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.statusBars())
+            }
+        }
+    }
+
+    fun applySystemBarContrast(window: Window, isLightSurface: Boolean) {
+        runCatching {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller.isAppearanceLightStatusBars = isLightSurface
+            controller.isAppearanceLightNavigationBars = isLightSurface
+        }
+    }
+
     fun performSubtleHaptic(context: Context) {
         runCatching {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val manager =
-                    context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                manager?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
+            val vibrator = getVibrator(context)
             if (vibrator != null && vibrator.hasVibrator()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     vibrator.vibrate(
@@ -215,5 +304,32 @@ object SystemLauncherHelper {
             }
         }
     }
-}
 
+    fun performGlowAppOpenHaptic(context: Context) {
+        runCatching {
+            val vibrator = getVibrator(context)
+            if (vibrator != null && vibrator.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    vibrator.vibrate(
+                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+                    )
+                } else {
+                    vibrator.vibrate(
+                        VibrationEffect.createOneShot(24L, VibrationEffect.DEFAULT_AMPLITUDE)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun getVibrator(context: Context): Vibrator? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager =
+                context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            manager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+}

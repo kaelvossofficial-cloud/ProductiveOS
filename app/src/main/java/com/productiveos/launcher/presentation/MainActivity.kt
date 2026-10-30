@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
@@ -14,6 +16,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -38,6 +42,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.productiveos.launcher.data.preferences.LauncherThemeOption
+import com.productiveos.launcher.data.repository.WhisperItem
 import com.productiveos.launcher.presentation.components.AppActionBottomSheet
 import com.productiveos.launcher.presentation.components.SwapPinnedAppBottomSheet
 import com.productiveos.launcher.presentation.screens.MindfulFrictionOverlay
@@ -46,6 +52,7 @@ import com.productiveos.launcher.presentation.screens.SettingsScreen
 import com.productiveos.launcher.presentation.screens.ZenHomeScreen
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.ProductiveOSTheme
+import com.productiveos.launcher.util.OmniSearchResult
 import com.productiveos.launcher.util.SystemLauncherHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
@@ -79,7 +86,6 @@ class MainActivity : ComponentActivity() {
                     } else if (viewModel.currentScreen.value != LauncherScreen.ZEN_HOME) {
                         viewModel.returnToHome()
                     }
-                    // When already on ZEN_HOME, consume back press intentionally (do nothing)
                 }
             }
         )
@@ -96,6 +102,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val settings by viewModel.settingsState.collectAsStateWithLifecycle()
+            val effectiveTheme by viewModel.effectiveTheme.collectAsStateWithLifecycle()
             val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
             val pinnedApps by viewModel.pinnedApps.collectAsStateWithLifecycle()
             val visibleApps by viewModel.visibleApps.collectAsStateWithLifecycle()
@@ -103,11 +110,20 @@ class MainActivity : ComponentActivity() {
             val filteredApps by viewModel.filteredSearchApps.collectAsStateWithLifecycle()
             val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
             val telemetry by viewModel.dailyTelemetry.collectAsStateWithLifecycle()
+            val whisperItem by viewModel.currentWhisper.collectAsStateWithLifecycle()
             val isDefaultLauncher by viewModel.isDefaultLauncher.collectAsStateWithLifecycle()
             val frictionTargetApp by viewModel.frictionTargetApp.collectAsStateWithLifecycle()
             val selectedContextApp by viewModel.selectedContextApp.collectAsStateWithLifecycle()
             val swapTargetApp by viewModel.swapTargetApp.collectAsStateWithLifecycle()
             val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
+            val omniResult by viewModel.omniSearchResult.collectAsStateWithLifecycle()
+
+            // BLOCK 1, ITEM 1: System Bar Contrast & Stealth Mode Fix
+            LaunchedEffect(effectiveTheme, settings.statusBarStealth) {
+                val isLight = effectiveTheme == LauncherThemeOption.WARM_STONE
+                SystemLauncherHelper.applySystemBarContrast(window, isLight)
+                SystemLauncherHelper.applyStatusBarVisibility(window, settings.statusBarStealth)
+            }
 
             val roleRequestLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.StartActivityForResult()
@@ -133,7 +149,7 @@ class MainActivity : ComponentActivity() {
             }
 
             ProductiveOSTheme(
-                themeOption = settings.themeOption,
+                themeOption = effectiveTheme,
                 typographyStyle = settings.typographyStyle,
                 fontScale = settings.fontScale
             ) {
@@ -145,10 +161,21 @@ class MainActivity : ComponentActivity() {
                         .background(palette.background)
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                 ) {
+                    // BLOCK 3: FastOutSlowInEasing 180ms cross-fades
                     AnimatedContent(
                         targetState = currentScreen,
                         transitionSpec = {
-                            fadeIn() togetherWith fadeOut()
+                            fadeIn(
+                                animationSpec = tween(
+                                    durationMillis = 180,
+                                    easing = FastOutSlowInEasing
+                                )
+                            ) togetherWith fadeOut(
+                                animationSpec = tween(
+                                    durationMillis = 180,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
                         },
                         label = "LauncherScreenTransition"
                     ) { screen ->
@@ -157,6 +184,7 @@ class MainActivity : ComponentActivity() {
                                 ZenHomeScreen(
                                     pinnedApps = pinnedApps,
                                     telemetry = telemetry,
+                                    whisperItem = whisperItem,
                                     settings = settings,
                                     isDefaultLauncher = isDefaultLauncher,
                                     onSetDefaultLauncherClick = requestDefaultHome,
@@ -176,8 +204,31 @@ class MainActivity : ComponentActivity() {
                                             viewModel.refreshAllState()
                                         }
                                     },
-                                    onAppClick = { app ->
+                                    onWhisperClick = {
                                         SystemLauncherHelper.performSubtleHaptic(context)
+                                        when (whisperItem) {
+                                            is WhisperItem.MediaNowPlaying -> {
+                                                SystemLauncherHelper.toggleMediaPlayback(context)
+                                            }
+                                            is WhisperItem.CalendarEvent -> {
+                                                SystemLauncherHelper.openCalendarApp(context)
+                                            }
+                                            is WhisperItem.BatteryStatus -> {
+                                                runCatching {
+                                                    context.startActivity(
+                                                        Intent(Intent.ACTION_POWER_USAGE_SUMMARY).apply {
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                    )
+                                                }.onFailure { viewModel.nextWhisper() }
+                                            }
+                                            else -> {
+                                                viewModel.nextWhisper()
+                                            }
+                                        }
+                                    },
+                                    onAppClick = { app ->
+                                        SystemLauncherHelper.performGlowAppOpenHaptic(context)
                                         viewModel.onAppRequested(app) { pkg ->
                                             SystemLauncherHelper.launchPackage(context, pkg)
                                         }
@@ -186,12 +237,89 @@ class MainActivity : ComponentActivity() {
                                         SystemLauncherHelper.performSubtleHaptic(context)
                                         viewModel.openAppContextSheet(app)
                                     },
+                                    onAppSwipeRight = { app ->
+                                        // BLOCK 1, ITEM 5: Swipe-Right launch secondary app
+                                        val targetPkg = app.swipeActionPackage
+                                        if (targetPkg != null) {
+                                            SystemLauncherHelper.performGlowAppOpenHaptic(context)
+                                            SystemLauncherHelper.launchPackage(context, targetPkg)
+                                        } else {
+                                            // Smart contextual fallback based on slot
+                                            when {
+                                                app.displayName.contains("message", ignoreCase = true) ||
+                                                    app.label.contains("message", ignoreCase = true) -> {
+                                                    runCatching {
+                                                        context.startActivity(
+                                                            Intent(Intent.ACTION_DIAL).apply {
+                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                                app.displayName.contains("phone", ignoreCase = true) ||
+                                                    app.label.contains("phone", ignoreCase = true) -> {
+                                                    runCatching {
+                                                        context.startActivity(
+                                                            Intent(Intent.ACTION_MAIN).apply {
+                                                                addCategory(Intent.CATEGORY_APP_MESSAGING)
+                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                                app.displayName.contains("camera", ignoreCase = true) ||
+                                                    app.label.contains("camera", ignoreCase = true) -> {
+                                                    runCatching {
+                                                        context.startActivity(
+                                                            Intent(Intent.ACTION_VIEW).apply {
+                                                                type = "image/*"
+                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                                else -> {
+                                                    SystemLauncherHelper.openAppInfo(context, app.packageName)
+                                                }
+                                            }
+                                        }
+                                    },
                                     onSwipeUpSearch = {
                                         SystemLauncherHelper.performSubtleHaptic(context)
                                         viewModel.openSearchDrawer()
                                     },
                                     onSwipeDownNotifications = {
                                         SystemLauncherHelper.expandNotificationShade(context)
+                                    },
+                                    onCanvasSwipeLeft = {
+                                        // Quick Launch Left (Camera / Notes)
+                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        if (settings.canvasSwipeLeftPkg.isNotEmpty()) {
+                                            SystemLauncherHelper.launchPackage(context, settings.canvasSwipeLeftPkg)
+                                        } else {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).apply {
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onCanvasSwipeRight = {
+                                        // Quick Launch Right (Phone Dialer)
+                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        if (settings.canvasSwipeRightPkg.isNotEmpty()) {
+                                            SystemLauncherHelper.launchPackage(context, settings.canvasSwipeRightPkg)
+                                        } else {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_DIAL, Uri.parse("tel:")).apply {
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                )
+                                            }
+                                        }
                                     },
                                     onDoubleTapEmptySpace = {
                                         SystemLauncherHelper.performSubtleHaptic(context)
@@ -208,17 +336,18 @@ class MainActivity : ComponentActivity() {
                                 SearchDrawerScreen(
                                     query = searchQuery,
                                     filteredApps = filteredApps,
+                                    omniResult = omniResult,
                                     settings = settings,
                                     onQueryChange = { newQuery ->
                                         viewModel.updateSearchQuery(newQuery) { matchedApp ->
-                                            SystemLauncherHelper.performSubtleHaptic(context)
+                                            SystemLauncherHelper.performGlowAppOpenHaptic(context)
                                             viewModel.onAppRequested(matchedApp) { pkg ->
                                                 SystemLauncherHelper.launchPackage(context, pkg)
                                             }
                                         }
                                     },
                                     onAppClick = { app ->
-                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        SystemLauncherHelper.performGlowAppOpenHaptic(context)
                                         viewModel.onAppRequested(app) { pkg ->
                                             SystemLauncherHelper.launchPackage(context, pkg)
                                         }
@@ -226,6 +355,31 @@ class MainActivity : ComponentActivity() {
                                     onAppLongClick = { app ->
                                         SystemLauncherHelper.performSubtleHaptic(context)
                                         viewModel.openAppContextSheet(app)
+                                    },
+                                    onOmniClick = { result ->
+                                        SystemLauncherHelper.performSubtleHaptic(context)
+                                        when (result) {
+                                            is OmniSearchResult.MathResult -> {
+                                                SystemLauncherHelper.copyToClipboard(
+                                                    context,
+                                                    "Calculator Result",
+                                                    result.copyText
+                                                )
+                                                viewModel.returnToHome()
+                                            }
+                                            is OmniSearchResult.WebSearch -> {
+                                                SystemLauncherHelper.searchWeb(context, result.query)
+                                                viewModel.returnToHome()
+                                            }
+                                            is OmniSearchResult.MapsSearch -> {
+                                                SystemLauncherHelper.openMapsSearch(context, result.query)
+                                                viewModel.returnToHome()
+                                            }
+                                            is OmniSearchResult.TimerCommand -> {
+                                                SystemLauncherHelper.startNativeTimer(context, result.minutes)
+                                                viewModel.returnToHome()
+                                            }
+                                        }
                                     },
                                     onCloseDrawer = {
                                         viewModel.returnToHome()
@@ -254,6 +408,13 @@ class MainActivity : ComponentActivity() {
                                     onAutoLaunchChanged = { viewModel.setAutoLaunchSingleResult(it) },
                                     onT9SearchChanged = { viewModel.setEnableT9Search(it) },
                                     onFrictionSecondsChanged = { viewModel.setFrictionSeconds(it) },
+                                    onMindfulFrictionEnabledChanged = { viewModel.setMindfulFrictionEnabled(it) },
+                                    onStatusBarStealthChanged = { viewModel.setStatusBarStealth(it) },
+                                    onBottomDockedSearchChanged = { viewModel.setBottomDockedSearch(it) },
+                                    onSwipeDownNotificationsChanged = { viewModel.setSwipeDownForNotifications(it) },
+                                    onOmniSearchToolsChanged = { viewModel.setOmniSearchToolsEnabled(it) },
+                                    onAutoDayNightThemeChanged = { viewModel.setAutoDayNightTheme(it) },
+                                    onSyncWallpaperClicked = { viewModel.syncWallpapersWithCurrentTheme() },
                                     onMovePinnedApp = { app, moveUp ->
                                         viewModel.movePinnedOrder(app, moveUp)
                                     },
@@ -287,7 +448,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel.dismissFrictionOverlay()
                             },
                             onContinueToApp = {
-                                SystemLauncherHelper.performSubtleHaptic(context)
+                                SystemLauncherHelper.performGlowAppOpenHaptic(context)
                                 viewModel.confirmAndLaunchApp(activeFrictionApp) { pkg ->
                                     SystemLauncherHelper.launchPackage(context, pkg)
                                 }
@@ -383,4 +544,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
