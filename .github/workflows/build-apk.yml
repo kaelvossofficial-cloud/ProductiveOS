@@ -3,9 +3,13 @@ name: Build ProductiveOS Android APK
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -14,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -39,3 +45,73 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      - name: Publish GitHub Release with Version, Date & Time
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          else
+            VER_NAME=$(grep 'versionName = ' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+            if [ -z "$VER_NAME" ]; then
+              VER_NAME="1.1.0"
+            fi
+            RELEASE_TAG="v${VER_NAME}"
+          fi
+
+          BUILD_DATE=$(date -u +"%A, %B %d, %Y")
+          BUILD_TIME=$(date -u +"%I:%M:%S %p UTC")
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+
+          APK_PATH=$(ls app/build/outputs/apk/debug/*.apk | head -n 1)
+
+          cat <<EOF > release_notes.md
+          # ProductiveOS ${RELEASE_TAG}
+
+          📅 **Release Date:** ${BUILD_DATE}  
+          ⏰ **Release Time:** ${BUILD_TIME}  
+          🔖 **Version:** \`${RELEASE_TAG}\`  
+          🔗 **Commit:** [\`${SHORT_SHA}\`](https://github.com/kaelvossofficial-cloud/ProductiveOS/commit/${COMMIT_SHA})
+
+          ---
+
+          ### 🌟 What's New & Core Features
+          - ⚡ **Quantum Clip (Zero-Click Clipboard Vault)**:
+            - Background local clipboard indexing (capped at 50 items, 7-day auto-purge, zero telemetry).
+            - Quick access via \`c/\` or \`clips\` in the search bar or bottom bar tap.
+          - 🎵 **Focus Anchor (Live Acoustic Flow Synthesizer)**:
+            - Real-time generative PCM synthesizer (Rain, Cafe Brownian noise, 10Hz Alpha Binaural flow).
+            - Live waveform pill on Zen Home (\`ılılı focus anchor · ... · tap to stop\`).
+          - 📝 **Micro-Log (Instant Second-Brain Capture)**:
+            - Fast 1.5s thought dump: \`log [thought]\` automatically writes timestamped entries into \`ProductiveOS/Inbox.md\` and Room database.
+            - Full-featured journal sheet to view, quick-append, copy, and export/share markdown.
+          - 🔥 **Burner Notes (Ephemeral 24-Hour Scratchpad)**:
+            - Zero-save scratchpad designed for temporary codes and fleeting notes.
+            - Auto-purges 24 hours after your last keystroke with a live countdown ticker.
+          - 🛡️ **PathCheck (Habit Breaker & Mindful Intent Gate)**:
+            - Anti-dopamine pause before launching distracting apps with 3 reflection pills: \`[Boredom]\`, \`[Need Info]\`, \`[Habit]\`.
+            - 7-day Weekly Mindful Awareness dashboard in Settings.
+          - 🔤 **Pro Launcher Enhancements**:
+            - Right-edge **A–Z Alphabet Wave Scrubber** with haptic steps and 32sp projected serif indicator.
+            - **Omni-Search Engine**: Inline math calculations (\`=\`), web bang (\`?\`), maps bang (\`@\`), and focus timer (\`t 15\`).
+            - **Daylight Auto-Theme**: Warm Stone (\`#F5F5F0\`) by day, OLED Black at night with solid wallpaper sync.
+            - **Ergonomics**: Dock swipe-right secondary apps, bottom-docked search mode, and stealth status bar.
+
+          ---
+
+          ### 📲 Direct Installation
+          Download **\`app-debug.apk\`** below to install directly on your Android phone.
+          EOF
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG exists. Updating release notes and APK asset..."
+            gh release edit "$RELEASE_TAG" --title "ProductiveOS ${RELEASE_TAG}" --notes-file release_notes.md
+            gh release upload "$RELEASE_TAG" "$APK_PATH" --clobber
+          else
+            echo "Creating new GitHub Release $RELEASE_TAG..."
+            gh release create "$RELEASE_TAG" "$APK_PATH" \
+              --title "ProductiveOS ${RELEASE_TAG}" \
+              --notes-file release_notes.md
+          fi
