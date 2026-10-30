@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import com.productiveos.launcher.data.local.AppDao
 import com.productiveos.launcher.data.local.AppEntity
 import com.productiveos.launcher.data.preferences.LauncherPreferencesRepository
+import com.productiveos.launcher.data.preferences.LauncherSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
