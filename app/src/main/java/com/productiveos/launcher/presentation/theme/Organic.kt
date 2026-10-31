@@ -9,10 +9,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -171,6 +174,54 @@ fun AppIconSquircle(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(containerSize * 0.95f)
             )
+        }
+    }
+}
+
+/**
+ * Double-Bezel ("Doppelrand") nested hardware enclosure.
+ * Simulates a machined outer bezel tray housing an inner glass/matte core.
+ */
+@Composable
+fun DoubleBezelSquircle(
+    modifier: Modifier = Modifier,
+    outerRadius: Dp = 22.dp,
+    bezelThickness: Dp = 2.dp,
+    innerPaddingHorizontal: Dp = 16.dp,
+    innerPaddingVertical: Dp = 12.dp,
+    elevated: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    val palette = LocalProductiveOSPalette.current
+    val outerShape = remember(outerRadius) { SquircleShape(outerRadius) }
+    val innerRadius = (outerRadius - bezelThickness).coerceAtLeast(8.dp)
+    val innerShape = remember(innerRadius) { SquircleShape(innerRadius) }
+
+    Box(
+        modifier = modifier
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .jellyPress(pressedScale = 0.97f)
+                        .clickable(onClick = onClick)
+                } else {
+                    Modifier
+                }
+            )
+            .clip(outerShape)
+            .background(palette.borderSubtle.copy(alpha = 0.28f))
+            .border(0.75.dp, palette.borderSubtle.copy(alpha = 0.75f), outerShape)
+            .padding(bezelThickness)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(innerShape)
+                .background(if (elevated) palette.surfaceElevated else palette.surface)
+                .border(0.75.dp, palette.primaryText.copy(alpha = 0.12f), innerShape)
+                .padding(horizontal = innerPaddingHorizontal, vertical = innerPaddingVertical)
+        ) {
+            content()
         }
     }
 }

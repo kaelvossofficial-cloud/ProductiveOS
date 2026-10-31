@@ -19,10 +19,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -253,21 +256,34 @@ class MainActivity : ComponentActivity() {
                         .background(palette.background)
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                 ) {
-                    // BLOCK 3: FastOutSlowInEasing 180ms cross-fades
+                    // BLOCK 4: Scale-95 & Custom CubicBezier Screen Transitions
+                    val drawerCurve = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
                     AnimatedContent(
                         targetState = currentScreen,
                         transitionSpec = {
-                            fadeIn(
+                            (fadeIn(
                                 animationSpec = tween(
-                                    durationMillis = 180,
+                                    durationMillis = 210,
+                                    easing = drawerCurve
+                                )
+                            ) + scaleIn(
+                                initialScale = 0.95f,
+                                animationSpec = tween(
+                                    durationMillis = 220,
+                                    easing = drawerCurve
+                                )
+                            )) togetherWith (fadeOut(
+                                animationSpec = tween(
+                                    durationMillis = 160,
                                     easing = FastOutSlowInEasing
                                 )
-                            ) togetherWith fadeOut(
+                            ) + scaleOut(
+                                targetScale = 0.97f,
                                 animationSpec = tween(
-                                    durationMillis = 180,
+                                    durationMillis = 160,
                                     easing = FastOutSlowInEasing
                                 )
-                            )
+                            ))
                         },
                         label = "LauncherScreenTransition"
                     ) { screen ->
@@ -436,6 +452,13 @@ class MainActivity : ComponentActivity() {
                                                 onLongPressEmptySpace = {
                                                     SystemLauncherHelper.performSubtleHaptic(context)
                                                     viewModel.openSettingsScreen()
+                                                },
+                                                onHomeEdgeLetterSelected = { letter ->
+                                                    SystemLauncherHelper.performSubtleHaptic(context)
+                                                    viewModel.openSearchDrawer()
+                                                    if (letter != "#") {
+                                                        viewModel.updateSearchQuery(letter) {}
+                                                    }
                                                 }
                                             )
                                         }

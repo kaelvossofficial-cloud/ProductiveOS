@@ -77,36 +77,29 @@ jobs:
 
           ---
 
-          ### 🌟 What's New in v1.3.0
+          ### 🌟 What's New in v1.4.0 (Senior UI/UX Choreography & Tactile Upgrade)
 
-          - 🎵 **Music Capsule under Time & Date Header**:
-            - Real-time media playback ticker directly below the home screen clock and date.
-            - Displays current track title and artist with live Play / Pause and Next Track controls.
-            - Automatically queries active Android MediaSessions and collapses gracefully when audio stops.
+          - 🕸️ **Interactive Kinetic Background Grid Canvas (`InteractiveGridCanvas`)**:
+            - Hardware-accelerated geometric dot & precision crosshair (`+`) matrix behind the Home Screen and Search Drawer.
+            - **Magnetic Touch Well**: Grid points near your finger displace radially with spring physics and brighten dynamically.
+            - **Hold-to-Open Resonance Ring**: Holding an app broadcasts an expanding concentric wave across the background lattice.
 
-          - ⚙️ **Modular Home Screen Customization Hub**:
-            - Dedicated toggle suite in Settings to show or hide every home component:
-              - Digital Clock (Time)
-              - Day & Date Subtitle
-              - Music Capsule
-              - Screen Time & Unlocks Telemetry Pill
-              - Contextual Whisper Header (Calendar, Battery, Media)
-              - Bottom Micro-OS Navigation Dock (Search, Burner, Clips, Settings)
+          - ⏳ **Asymmetric "Long-Touch Pause" Liquid Fill Ritual**:
+            - Replaced small spinner with a **Full-Row Liquid Clip-Path Progress Sweep** (`0% -> 100%` width) and glowing meniscus edge.
+            - **Asymmetric Enter/Exit Timing**: Deliberate linear progression during hold with rhythmic 600ms haptic ticks; snappy `180ms` custom `--ease-out` (`CubicBezierEasing(0.23, 1, 0.32, 1)`) bounce-back on early release.
+            - **Peripheral Focus Dimming**: Non-held apps smoothly dim to `32%` opacity while holding an app so your attention stays anchored.
 
-          - 🔒 **Double-Tap Empty Space to Lock Screen**:
-            - Integrated Android Device Policy Admin (`lockNow()`) allowing you to double tap anywhere on home screen empty space to immediately turn off and lock the display.
-            - Easily enabled or toggled from Settings.
+          - 🌊 **Gaussian Sine-Wave Right-Edge Sidebar (`WaveSidebarScrubber`)**:
+            - Available on **both** the Zen Home Screen and Search Drawer.
+            - Scrubbing vertically along the right edge bends adjacent letters (`A–Z`) outward in a smooth Gaussian bell curve (`46dp` crest) with dynamic font scaling and a floating Double-Bezel squircle preview badge.
+            - Releasing on any letter from the Home Screen immediately jumps into the Search Drawer filtered to that letter.
 
-          - 💧 **Liquid Physics & Organic UI Layer**:
-            - **Elastic Jelly Press Engine (`Modifier.jellyPress()`)**: Exaggerated tactile spring physics (`dampingRatio = 0.45f`, `Spring.StiffnessLow`) applied across home items, buttons, cards, and pills.
-            - **Dynamic Squircle Geometry**: Mathematical Lamé superellipse curves (`SquircleShape`) and 12-lobed organic containers (`LobedSquircleShape`) for cards, widgets, and app glyphs.
-            - **Monochrome Adaptive Icon Squircle Engine (`AppIconSquircle`)**: Extracts monochrome adaptive icon layers and tints them with dynamic theme colors.
-            - **Liquid Theme Transitions**: 600ms animated color morphing across all palette tokens on theme switch.
+          - 🚀 **Origin-Aware Scale-95 Transitions & Waterfall Stagger**:
+            - Screen transitions now combine custom iOS/Linear-grade drawer curves (`CubicBezierEasing(0.32, 0.72, 0, 1)`) with `scaleIn(0.95f -> 1f)`.
+            - Search drawer app rows cascade in with a `28ms` per-item waterfall reveal (`translationY` + `alpha`) without blocking immediate touch input.
 
-          - 🧩 **Organic Dashboard Widget Stack**:
-            - **Calendar Card**: Editorial monthly header + 7-day strip with highlight on current date.
-            - **Focus Task List Card**: Interactive daily priorities with circular checkboxes and completion counters.
-            - **Continuous Breathing Widget**: Hypnotic organic breathing guide scaling with `rememberInfiniteTransition` to anchor your focus.
+          - 🛡️ **Double-Bezel ("Doppelrand") Hardware Enclosures (`DoubleBezelSquircle`)**:
+            - Upgraded the Music Capsule, Telemetry Pill, Bottom Micro-OS Dock, Omni-Search bar, and Dashboard Widget Cards to nested Outer Shell + Inner Core squircle enclosures with specular inner borders.
 
           - 📊 **Retained v1.2 Features**:
             - Mindful Reports Dashboard (Daily/Weekly/Monthly, concentric radial ring charts, hourly usage breakdown).

@@ -59,6 +59,8 @@ data class LauncherSettings(
     val showMusicCapsule: Boolean = true,
     val showIconDock: Boolean = true,
     val doubleTapToLock: Boolean = false,
+    val showInteractiveGrid: Boolean = true,
+    val showHomeEdgeSidebar: Boolean = true,
     val enableHoldToOpen: Boolean = true,
     val holdToOpenSeconds: Int = 3,
     val installedWidgetIds: List<Int> = emptyList(),
@@ -95,6 +97,8 @@ class LauncherPreferencesRepository @Inject constructor(
         val SHOW_MUSIC_CAPSULE = booleanPreferencesKey("show_music_capsule")
         val SHOW_ICON_DOCK = booleanPreferencesKey("show_icon_dock")
         val DOUBLE_TAP_TO_LOCK = booleanPreferencesKey("double_tap_to_lock")
+        val SHOW_INTERACTIVE_GRID = booleanPreferencesKey("show_interactive_grid")
+        val SHOW_HOME_EDGE_SIDEBAR = booleanPreferencesKey("show_home_edge_sidebar")
         val ENABLE_HOLD_TO_OPEN = booleanPreferencesKey("enable_hold_to_open")
         val HOLD_TO_OPEN_SECONDS = intPreferencesKey("hold_to_open_seconds")
         val INSTALLED_WIDGET_IDS = stringPreferencesKey("installed_widget_ids")
@@ -145,6 +149,8 @@ class LauncherPreferencesRepository @Inject constructor(
             showMusicCapsule = prefs[Keys.SHOW_MUSIC_CAPSULE] ?: true,
             showIconDock = prefs[Keys.SHOW_ICON_DOCK] ?: true,
             doubleTapToLock = prefs[Keys.DOUBLE_TAP_TO_LOCK] ?: false,
+            showInteractiveGrid = prefs[Keys.SHOW_INTERACTIVE_GRID] ?: true,
+            showHomeEdgeSidebar = prefs[Keys.SHOW_HOME_EDGE_SIDEBAR] ?: true,
             enableHoldToOpen = prefs[Keys.ENABLE_HOLD_TO_OPEN] ?: true,
             holdToOpenSeconds = prefs[Keys.HOLD_TO_OPEN_SECONDS] ?: 3,
             installedWidgetIds = widgetIds,
@@ -221,6 +227,8 @@ class LauncherPreferencesRepository @Inject constructor(
             "showMusicCapsule" -> Keys.SHOW_MUSIC_CAPSULE
             "showIconDock" -> Keys.SHOW_ICON_DOCK
             "doubleTapToLock" -> Keys.DOUBLE_TAP_TO_LOCK
+            "showInteractiveGrid" -> Keys.SHOW_INTERACTIVE_GRID
+            "showHomeEdgeSidebar" -> Keys.SHOW_HOME_EDGE_SIDEBAR
             else -> return
         }
         context.dataStore.edit { it[key] = value }

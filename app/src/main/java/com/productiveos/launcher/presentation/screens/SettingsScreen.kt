@@ -320,6 +320,20 @@ fun SettingsScreen(
             onCheckedChange = { onHomeToggleChanged("showIconDock", it) }
         )
 
+        ToggleSettingRow(
+            title = "interactive background grid",
+            subtitle = "kinetic dot & crosshair matrix that warps gently with touch and hold ripples",
+            checked = settings.showInteractiveGrid,
+            onCheckedChange = { onHomeToggleChanged("showInteractiveGrid", it) }
+        )
+
+        ToggleSettingRow(
+            title = "right-edge sine-wave sidebar",
+            subtitle = "scrub vertically along the right edge of home screen to quick-jump to any letter",
+            checked = settings.showHomeEdgeSidebar,
+            onCheckedChange = { onHomeToggleChanged("showHomeEdgeSidebar", it) }
+        )
+
         Spacer(modifier = Modifier.height(28.dp))
 
         // BLOCK 4, ITEM 2: MINDFUL FRICTION GATE & PATHCHECK AWARENESS

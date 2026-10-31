@@ -3,6 +3,9 @@ package com.productiveos.launcher.presentation.screens
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -10,6 +13,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -39,36 +43,42 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.productiveos.launcher.presentation.theme.AppIconSquircle
-import com.productiveos.launcher.presentation.theme.jellyPress
-import com.productiveos.launcher.util.MediaSessionHelper
-import com.productiveos.launcher.util.MusicInfo
-import androidx.compose.ui.platform.LocalContext
 import com.productiveos.launcher.data.local.AppEntity
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
 import com.productiveos.launcher.data.repository.DailyTelemetry
 import com.productiveos.launcher.data.repository.WhisperItem
+import com.productiveos.launcher.presentation.components.InteractiveGridCanvas
+import com.productiveos.launcher.presentation.components.WaveSidebarScrubber
+import com.productiveos.launcher.presentation.theme.DoubleBezelSquircle
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
-import com.productiveos.launcher.presentation.theme.tactilePress
+import com.productiveos.launcher.presentation.theme.SquircleShape
+import com.productiveos.launcher.presentation.theme.jellyPress
 import com.productiveos.launcher.util.FocusSoundMode
-import kotlinx.coroutines.Job
+import com.productiveos.launcher.util.MediaSessionHelper
+import com.productiveos.launcher.util.MusicInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val SnappyEaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
 @Composable
 fun ZenHomeScreen(
@@ -94,7 +104,8 @@ fun ZenHomeScreen(
     onCanvasSwipeLeft: () -> Unit,
     onCanvasSwipeRight: () -> Unit,
     onDoubleTapEmptySpace: () -> Unit,
-    onLongPressEmptySpace: () -> Unit
+    onLongPressEmptySpace: () -> Unit,
+    onHomeEdgeLetterSelected: (String) -> Unit = { onSwipeUpSearch() }
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
@@ -140,13 +151,28 @@ fun ZenHomeScreen(
         TextAlignmentOption.RIGHT -> TextAlign.End
     }
 
-    var totalCanvasDragX by remember { mutableFloatStateOf(0f) }
-    var totalCanvasDragY by remember { mutableFloatStateOf(0f) }
+    // Track global touch coordinates for the Interactive Grid Canvas & Active Hold Pause
+    var activeTouchPoint by remember { mutableStateOf<Offset?>(null) }
+    var currentlyHoldingPackage by remember { mutableStateOf<String?>(null) }
+    var activeHoldProgress by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(palette.background)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val activeChange = event.changes.firstOrNull { it.pressed }
+                        activeTouchPoint = activeChange?.position
+                        if (event.changes.none { it.pressed }) {
+                            break
+                        }
+                    }
+                    activeTouchPoint = null
+                }
+            }
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { onDoubleTapEmptySpace() },
@@ -171,10 +197,25 @@ fun ZenHomeScreen(
                     }
                 )
             }
-            .padding(horizontal = 28.dp, vertical = 24.dp)
     ) {
+        // Layer 0: Interactive Kinetic Background Grid Canvas
+        if (settings.showInteractiveGrid) {
+            InteractiveGridCanvas(
+                touchPoint = activeTouchPoint,
+                holdProgress = activeHoldProgress
+            )
+        }
+
+        // Layer 1: Main Home Content
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = 28.dp,
+                    end = if (settings.showHomeEdgeSidebar) 34.dp else 28.dp,
+                    top = 24.dp,
+                    bottom = 24.dp
+                ),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = horizontalAlignment
         ) {
@@ -186,14 +227,14 @@ fun ZenHomeScreen(
                 horizontalAlignment = horizontalAlignment
             ) {
                 if (!isDefaultLauncher) {
-                    Box(
-                        modifier = Modifier
-                            .padding(bottom = 20.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(palette.surfaceElevated)
-                            .border(1.dp, palette.borderSubtle, RoundedCornerShape(50))
-                            .clickable(onClick = onSetDefaultLauncherClick)
-                            .padding(horizontal = 16.dp, vertical = 9.dp)
+                    DoubleBezelSquircle(
+                        modifier = Modifier.padding(bottom = 20.dp),
+                        outerRadius = 20.dp,
+                        bezelThickness = 1.5.dp,
+                        innerPaddingHorizontal = 16.dp,
+                        innerPaddingVertical = 8.dp,
+                        elevated = true,
+                        onClick = onSetDefaultLauncherClick
                     ) {
                         Text(
                             text = "Set ProductiveOS as Default Home →",
@@ -228,7 +269,7 @@ fun ZenHomeScreen(
                     )
                 }
 
-                // Music Capsule under Time and Date
+                // Double-Bezel Music Capsule under Time and Date
                 AnimatedVisibility(
                     visible = settings.showMusicCapsule && musicInfo != null,
                     enter = fadeIn(),
@@ -237,45 +278,46 @@ fun ZenHomeScreen(
                     val m = musicInfo
                     if (m != null) {
                         Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .jellyPress(0.95f)
-                                .clip(RoundedCornerShape(50))
-                                .background(palette.surface)
-                                .border(1.dp, palette.borderSubtle, RoundedCornerShape(50))
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    MediaSessionHelper.playPause(context)
-                                }
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        DoubleBezelSquircle(
+                            outerRadius = 20.dp,
+                            bezelThickness = 1.5.dp,
+                            innerPaddingHorizontal = 14.dp,
+                            innerPaddingVertical = 6.dp,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                MediaSessionHelper.playPause(context)
+                            }
                         ) {
-                            Text(
-                                text = if (m.isPlaying) "▶" else "❚❚",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = palette.primaryText
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            val trackText = if (m.artist.isNotBlank()) "${m.title} · ${m.artist}".lowercase() else m.title.lowercase()
-                            Text(
-                                text = trackText.take(30),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = palette.primaryText
-                            )
-                            if (m.hasControls) {
-                                Spacer(modifier = Modifier.width(10.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "⏭",
+                                    text = if (m.isPlaying) "▶" else "❚❚",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = palette.secondaryText,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            MediaSessionHelper.next(context)
-                                        }
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    color = palette.primaryText
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                val trackText = if (m.artist.isNotBlank()) "${m.title} · ${m.artist}".lowercase() else m.title.lowercase()
+                                Text(
+                                    text = trackText.take(30),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = palette.primaryText
+                                )
+                                if (m.hasControls) {
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "⏭",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = palette.secondaryText,
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                MediaSessionHelper.next(context)
+                                            }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -284,29 +326,30 @@ fun ZenHomeScreen(
                 if (settings.showTelemetry) {
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Screen-Time & Focus Telemetry Pill
-                    Row(
-                        modifier = Modifier
-                            .jellyPress(0.95f)
-                            .clip(RoundedCornerShape(50))
-                            .background(palette.surface)
-                            .border(1.dp, palette.borderSubtle, RoundedCornerShape(50))
-                            .clickable(onClick = onTelemetryPillClick)
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Double-Bezel Screen-Time & Focus Telemetry Pill
+                    DoubleBezelSquircle(
+                        outerRadius = 20.dp,
+                        bezelThickness = 1.5.dp,
+                        innerPaddingHorizontal = 14.dp,
+                        innerPaddingVertical = 7.dp,
+                        onClick = onTelemetryPillClick
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(palette.accentDot)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = telemetry.formattedText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.secondaryText
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(palette.accentDot)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = telemetry.formattedText,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.secondaryText
+                            )
+                        }
                     }
                 }
 
@@ -376,39 +419,53 @@ fun ZenHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = horizontalAlignment
             ) {
                 if (pinnedApps.isEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(palette.surface)
-                            .border(1.dp, palette.borderSubtle, RoundedCornerShape(16.dp))
-                            .clickable(onClick = onSwipeUpSearch)
-                            .padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    DoubleBezelSquircle(
+                        modifier = Modifier.fillMaxWidth(),
+                        outerRadius = 22.dp,
+                        bezelThickness = 2.dp,
+                        innerPaddingHorizontal = 20.dp,
+                        innerPaddingVertical = 20.dp,
+                        onClick = onSwipeUpSearch
                     ) {
-                        Text(
-                            text = "productiveos · zen space",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = palette.primaryText
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "swipe up or tap here to open apps & pin essentials",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = palette.secondaryText,
-                            textAlign = TextAlign.Center
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "productiveos · zen space",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = palette.primaryText
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "swipe up or tap here to open apps & pin essentials",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.secondaryText,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 } else {
                     pinnedApps.take(6).forEach { app ->
+                        val isAnotherHolding = currentlyHoldingPackage != null && currentlyHoldingPackage != app.packageName
                         IntentionalHoldAppRow(
                             app = app,
                             settings = settings,
                             textAlign = textAlign,
+                            isDimmedByOtherHold = isAnotherHolding,
+                            onHoldStateChange = { holding, progress ->
+                                if (holding) {
+                                    currentlyHoldingPackage = app.packageName
+                                    activeHoldProgress = progress
+                                } else if (currentlyHoldingPackage == app.packageName) {
+                                    currentlyHoldingPackage = null
+                                    activeHoldProgress = 0f
+                                }
+                            },
                             onAppClick = onAppClick,
                             onAppLongClick = onAppLongClick
                         )
@@ -424,72 +481,102 @@ fun ZenHomeScreen(
                         .padding(bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    DoubleBezelSquircle(
+                        outerRadius = 24.dp,
+                        bezelThickness = 1.5.dp,
+                        innerPaddingHorizontal = 16.dp,
+                        innerPaddingVertical = 8.dp
                     ) {
-                        Text(
-                            text = "↑ search",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.secondaryText,
-                            modifier = Modifier
-                                .jellyPress(0.95f)
-                                .clickable(onClick = onSwipeUpSearch)
-                        )
-                        Text(
-                            text = "·",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.mutedText
-                        )
-                        Text(
-                            text = "burner",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.secondaryText,
-                            modifier = Modifier
-                                .jellyPress(0.95f)
-                                .clickable(onClick = onOpenBurnerNote)
-                        )
-                        Text(
-                            text = "·",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.mutedText
-                        )
-                        Text(
-                            text = "clips",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.secondaryText,
-                            modifier = Modifier
-                                .jellyPress(0.95f)
-                                .clickable(onClick = onOpenQuantumClip)
-                        )
-                        Text(
-                            text = "·",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.mutedText
-                        )
-                        Text(
-                            text = "settings",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.secondaryText,
-                            modifier = Modifier
-                                .jellyPress(0.95f)
-                                .clickable(onClick = onLongPressEmptySpace)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "↑ search",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.secondaryText,
+                                modifier = Modifier
+                                    .jellyPress(0.95f)
+                                    .clickable(onClick = onSwipeUpSearch)
+                            )
+                            Text(
+                                text = "·",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.mutedText
+                            )
+                            Text(
+                                text = "burner",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.secondaryText,
+                                modifier = Modifier
+                                    .jellyPress(0.95f)
+                                    .clickable(onClick = onOpenBurnerNote)
+                            )
+                            Text(
+                                text = "·",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.mutedText
+                            )
+                            Text(
+                                text = "clips",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.secondaryText,
+                                modifier = Modifier
+                                    .jellyPress(0.95f)
+                                    .clickable(onClick = onOpenQuantumClip)
+                            )
+                            Text(
+                                text = "·",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.mutedText
+                            )
+                            Text(
+                                text = "settings",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.secondaryText,
+                                modifier = Modifier
+                                    .jellyPress(0.95f)
+                                    .clickable(onClick = onLongPressEmptySpace)
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // Layer 2: Right-Edge Gaussian Sine-Wave Sidebar on Home Screen
+        if (settings.showHomeEdgeSidebar) {
+            WaveSidebarScrubber(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(vertical = 84.dp, end = 2.dp),
+                compactIdleMode = true,
+                onLetterScrubbed = { /* Live wave preview */ },
+                onScrubReleased = { letter ->
+                    if (letter != null) {
+                        onHomeEdgeLetterSelected(letter)
+                    }
+                }
+            )
+        }
     }
 }
 
+/**
+ * Block 2: Asymmetric "Long-Touch Pause" Ritual Row.
+ *
+ * Features:
+ * - Full-row liquid clip-path progress sweep (0% -> 100% width) with inverted contrast text inside the clipped wave.
+ * - Asymmetric Enter/Exit timing: deliberate linear progression during hold, snappy 180ms `--ease-out` snap-back on release.
+ * - Peripheral focus dimming when another row is being held.
+ */
 @Composable
 private fun IntentionalHoldAppRow(
     app: AppEntity,
     settings: LauncherSettings,
     textAlign: TextAlign,
+    isDimmedByOtherHold: Boolean,
+    onHoldStateChange: (Boolean, Float) -> Unit,
     onAppClick: (AppEntity) -> Unit,
     onAppLongClick: (AppEntity) -> Unit
 ) {
@@ -502,18 +589,65 @@ private fun IntentionalHoldAppRow(
     val holdDurationMs = (settings.holdToOpenSeconds * 1000L).coerceAtLeast(1000L)
     val remainingSeconds = ((1f - progress.value) * settings.holdToOpenSeconds).toInt() + 1
 
+    val rowAlpha by animateFloatAsState(
+        targetValue = if (isDimmedByOtherHold) 0.32f else 1f,
+        animationSpec = tween(durationMillis = 200, easing = SnappyEaseOut),
+        label = "PeripheralFocusAlpha"
+    )
+
+    val holdScale by animateFloatAsState(
+        targetValue = if (isHolding) 0.975f else 1f,
+        animationSpec = tween(durationMillis = 160, easing = SnappyEaseOut),
+        label = "HoldScale"
+    )
+
+    val rowShape = remember { SquircleShape(14.dp) }
+    val fillFraction = progress.value.coerceIn(0f, 1f)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .jellyPress(0.97f)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isHolding) palette.surfaceElevated.copy(alpha = 0.6f) else Color.Transparent)
+            .graphicsLayer {
+                alpha = rowAlpha
+                scaleX = holdScale
+                scaleY = holdScale
+            }
+            .clip(rowShape)
+            .background(
+                if (isHolding) palette.surface.copy(alpha = 0.75f) else Color.Transparent
+            )
             .border(
                 width = if (isHolding) 1.dp else 0.dp,
                 color = if (isHolding) palette.borderSubtle else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
+                shape = rowShape
             )
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .drawWithContent {
+                // Draw base row
+                drawContent()
+
+                // Draw liquid clip-path sweep overlay during hold
+                if (fillFraction > 0.005f) {
+                    val clipWidth = size.width * fillFraction
+                    clipRect(
+                        left = 0f,
+                        top = 0f,
+                        right = clipWidth,
+                        bottom = size.height
+                    ) {
+                        drawRect(
+                            color = palette.primaryText.copy(alpha = 0.14f)
+                        )
+                    }
+                    // Leading edge glowing meniscus line
+                    drawLine(
+                        color = palette.primaryText.copy(alpha = 0.65f),
+                        start = Offset(clipWidth, 0f),
+                        end = Offset(clipWidth, size.height),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+            }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
             .pointerInput(settings.enableHoldToOpen, settings.holdToOpenSeconds) {
                 if (!settings.enableHoldToOpen) {
                     detectTapGestures(
@@ -531,6 +665,7 @@ private fun IntentionalHoldAppRow(
                         onPress = {
                             isHolding = true
                             progress.snapTo(0f)
+                            onHoldStateChange(true, 0f)
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
                             val animJob = coroutineScope.launch {
@@ -538,28 +673,44 @@ private fun IntentionalHoldAppRow(
                                 var lastTick = startTime
                                 while (System.currentTimeMillis() - startTime < holdDurationMs) {
                                     val elapsed = System.currentTimeMillis() - startTime
-                                    progress.snapTo((elapsed.toFloat() / holdDurationMs).coerceIn(0f, 1f))
-                                    if (System.currentTimeMillis() - lastTick >= 700L) {
+                                    val p = (elapsed.toFloat() / holdDurationMs).coerceIn(0f, 1f)
+                                    progress.snapTo(p)
+                                    onHoldStateChange(true, p)
+                                    if (System.currentTimeMillis() - lastTick >= 600L) {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         lastTick = System.currentTimeMillis()
                                     }
                                     delay(16L)
                                 }
                                 progress.snapTo(1f)
+                                onHoldStateChange(true, 1f)
                             }
 
-                            val released = tryAwaitRelease()
+                            tryAwaitRelease()
                             animJob.cancel()
-                            if (progress.value >= 0.98f) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onAppClick(app)
-                            }
+                            val completed = progress.value >= 0.98f
                             isHolding = false
-                            progress.snapTo(0f)
+                            if (completed) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onHoldStateChange(false, 0f)
+                                progress.snapTo(0f)
+                                onAppClick(app)
+                            } else {
+                                // Snappy 180ms ease-out release回弹
+                                coroutineScope.launch {
+                                    progress.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = tween(durationMillis = 180, easing = SnappyEaseOut)
+                                    )
+                                    onHoldStateChange(false, 0f)
+                                }
+                            }
                         },
                         onLongPress = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onAppLongClick(app)
+                            if (!isHolding) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onAppLongClick(app)
+                            }
                         }
                     )
                 }
@@ -591,7 +742,7 @@ private fun IntentionalHoldAppRow(
                 )
             }
 
-            if (isHolding && settings.enableHoldToOpen) {
+            if ((isHolding || fillFraction > 0.05f) && settings.enableHoldToOpen) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -610,7 +761,7 @@ private fun IntentionalHoldAppRow(
                             drawArc(
                                 color = palette.primaryText,
                                 startAngle = -90f,
-                                sweepAngle = progress.value * 360f,
+                                sweepAngle = fillFraction * 360f,
                                 useCenter = false,
                                 style = Stroke(width = stroke, cap = StrokeCap.Round)
                             )
@@ -618,7 +769,7 @@ private fun IntentionalHoldAppRow(
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "hold ${remainingSeconds}s",
+                        text = "pause ${remainingSeconds}s",
                         style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
                         color = palette.secondaryText
                     )

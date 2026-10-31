@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.productiveos.launcher.presentation.theme.DoubleBezelSquircle
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.SquircleShape
 import com.productiveos.launcher.presentation.theme.jellyPress
@@ -48,7 +49,7 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Editorial Squircle Card Component supporting jelly press and smooth borders.
+ * Editorial Squircle Card Component using Double-Bezel ("Doppelrand") nested hardware enclosure.
  */
 @Composable
 fun SquircleCard(
@@ -56,20 +57,15 @@ fun SquircleCard(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    val palette = LocalProductiveOSPalette.current
-    val shape = remember { SquircleShape(20.dp) }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.jellyPress(pressedScale = 0.97f).clickable(onClick = onClick) else Modifier)
-            .clip(shape)
-            .background(palette.surface)
-            .border(1.dp, palette.borderSubtle, shape)
-            .padding(18.dp)
-    ) {
-        content()
-    }
+    DoubleBezelSquircle(
+        modifier = modifier.fillMaxWidth(),
+        outerRadius = 24.dp,
+        bezelThickness = 2.dp,
+        innerPaddingHorizontal = 18.dp,
+        innerPaddingVertical = 18.dp,
+        onClick = onClick,
+        content = content
+    )
 }
 
 /**
