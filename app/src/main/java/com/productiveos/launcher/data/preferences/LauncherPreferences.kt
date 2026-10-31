@@ -52,6 +52,13 @@ data class LauncherSettings(
     val enableT9Search: Boolean = true,
     val frictionSeconds: Int = 3,
     val mindfulFrictionEnabled: Boolean = true,
+    val showClock: Boolean = true,
+    val showDate: Boolean = true,
+    val showTelemetry: Boolean = true,
+    val showWhisper: Boolean = true,
+    val showMusicCapsule: Boolean = true,
+    val showIconDock: Boolean = true,
+    val doubleTapToLock: Boolean = false,
     val enableHoldToOpen: Boolean = true,
     val holdToOpenSeconds: Int = 3,
     val installedWidgetIds: List<Int> = emptyList(),
@@ -81,6 +88,13 @@ class LauncherPreferencesRepository @Inject constructor(
         val ENABLE_T9_SEARCH = booleanPreferencesKey("enable_t9_search")
         val FRICTION_SECONDS = intPreferencesKey("friction_seconds")
         val MINDFUL_FRICTION_ENABLED = booleanPreferencesKey("mindful_friction_enabled")
+        val SHOW_CLOCK = booleanPreferencesKey("show_clock")
+        val SHOW_DATE = booleanPreferencesKey("show_date")
+        val SHOW_TELEMETRY = booleanPreferencesKey("show_telemetry")
+        val SHOW_WHISPER = booleanPreferencesKey("show_whisper")
+        val SHOW_MUSIC_CAPSULE = booleanPreferencesKey("show_music_capsule")
+        val SHOW_ICON_DOCK = booleanPreferencesKey("show_icon_dock")
+        val DOUBLE_TAP_TO_LOCK = booleanPreferencesKey("double_tap_to_lock")
         val ENABLE_HOLD_TO_OPEN = booleanPreferencesKey("enable_hold_to_open")
         val HOLD_TO_OPEN_SECONDS = intPreferencesKey("hold_to_open_seconds")
         val INSTALLED_WIDGET_IDS = stringPreferencesKey("installed_widget_ids")
@@ -124,6 +138,13 @@ class LauncherPreferencesRepository @Inject constructor(
             enableT9Search = prefs[Keys.ENABLE_T9_SEARCH] ?: true,
             frictionSeconds = prefs[Keys.FRICTION_SECONDS] ?: 3,
             mindfulFrictionEnabled = prefs[Keys.MINDFUL_FRICTION_ENABLED] ?: true,
+            showClock = prefs[Keys.SHOW_CLOCK] ?: true,
+            showDate = prefs[Keys.SHOW_DATE] ?: true,
+            showTelemetry = prefs[Keys.SHOW_TELEMETRY] ?: true,
+            showWhisper = prefs[Keys.SHOW_WHISPER] ?: true,
+            showMusicCapsule = prefs[Keys.SHOW_MUSIC_CAPSULE] ?: true,
+            showIconDock = prefs[Keys.SHOW_ICON_DOCK] ?: true,
+            doubleTapToLock = prefs[Keys.DOUBLE_TAP_TO_LOCK] ?: false,
             enableHoldToOpen = prefs[Keys.ENABLE_HOLD_TO_OPEN] ?: true,
             holdToOpenSeconds = prefs[Keys.HOLD_TO_OPEN_SECONDS] ?: 3,
             installedWidgetIds = widgetIds,
@@ -189,6 +210,20 @@ class LauncherPreferencesRepository @Inject constructor(
 
     suspend fun setMindfulFrictionEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.MINDFUL_FRICTION_ENABLED] = enabled }
+    }
+
+    suspend fun setHomeToggle(name: String, value: Boolean) {
+        val key = when (name) {
+            "showClock" -> Keys.SHOW_CLOCK
+            "showDate" -> Keys.SHOW_DATE
+            "showTelemetry" -> Keys.SHOW_TELEMETRY
+            "showWhisper" -> Keys.SHOW_WHISPER
+            "showMusicCapsule" -> Keys.SHOW_MUSIC_CAPSULE
+            "showIconDock" -> Keys.SHOW_ICON_DOCK
+            "doubleTapToLock" -> Keys.DOUBLE_TAP_TO_LOCK
+            else -> return
+        }
+        context.dataStore.edit { it[key] = value }
     }
 
     suspend fun setEnableHoldToOpen(enabled: Boolean) {

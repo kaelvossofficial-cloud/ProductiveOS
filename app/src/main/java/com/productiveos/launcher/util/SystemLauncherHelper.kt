@@ -20,7 +20,9 @@ import android.os.VibratorManager
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
-import android.view.KeyEvent
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import com.productiveos.launcher.data.admin.LockScreenAdminReceiver
 import android.view.Window
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -337,6 +339,28 @@ object SystemLauncherHelper {
                 }
             }
         }
+    }
+
+    fun lockScreen(context: Context): Boolean {
+        return runCatching {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+            val adminComponent = ComponentName(context, LockScreenAdminReceiver::class.java)
+            if (dpm != null && dpm.isAdminActive(adminComponent)) {
+                dpm.lockNow()
+                true
+            } else {
+                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                    putExtra(
+                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        "Enable Device Admin permission for ProductiveOS to lock screen on double tap."
+                    )
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                false
+            }
+        }.getOrDefault(false)
     }
 
     private fun getVibrator(context: Context): Vibrator? {

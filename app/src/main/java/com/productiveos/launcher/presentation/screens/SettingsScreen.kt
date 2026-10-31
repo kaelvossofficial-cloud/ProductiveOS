@@ -86,7 +86,8 @@ fun SettingsScreen(
     onUpdateVaultPasscode: (String) -> Unit,
     onHoldToOpenChanged: (Boolean) -> Unit = {},
     onHoldSecondsChanged: (Int) -> Unit = {},
-    onRequestNotificationAccess: () -> Unit = {}
+    onRequestNotificationAccess: () -> Unit = {},
+    onHomeToggleChanged: (String, Boolean) -> Unit = { _, _ -> }
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
@@ -262,6 +263,61 @@ fun SettingsScreen(
             subtitle = if (settings.statusBarStealth) "stealth mode (hidden status bar)" else "visible status bar",
             checked = !settings.statusBarStealth,
             onCheckedChange = { visible -> onStatusBarStealthChanged(!visible) }
+        )
+
+        ToggleSettingRow(
+            title = "double tap to lock screen",
+            subtitle = "double tap any empty space on home screen to turn off and lock the display",
+            checked = settings.doubleTapToLock,
+            onCheckedChange = { onHomeToggleChanged("doubleTapToLock", it) }
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // HOME SCREEN CUSTOMIZATION (WIDGETS & ELEMENTS TOGGLE)
+        SectionHeader(title = "home screen customization")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleSettingRow(
+            title = "digital clock",
+            subtitle = "show main headline time on home screen",
+            checked = settings.showClock,
+            onCheckedChange = { onHomeToggleChanged("showClock", it) }
+        )
+
+        ToggleSettingRow(
+            title = "current date & day",
+            subtitle = "show full weekday and date subtitle",
+            checked = settings.showDate,
+            onCheckedChange = { onHomeToggleChanged("showDate", it) }
+        )
+
+        ToggleSettingRow(
+            title = "music capsule",
+            subtitle = "compact media player pill below date with playback controls",
+            checked = settings.showMusicCapsule,
+            onCheckedChange = { onHomeToggleChanged("showMusicCapsule", it) }
+        )
+
+        ToggleSettingRow(
+            title = "screen time telemetry pill",
+            subtitle = "show daily hours and unlock counts pill",
+            checked = settings.showTelemetry,
+            onCheckedChange = { onHomeToggleChanged("showTelemetry", it) }
+        )
+
+        ToggleSettingRow(
+            title = "contextual whisper header",
+            subtitle = "show dynamic calendar, upcoming events, or battery status ticker",
+            checked = settings.showWhisper,
+            onCheckedChange = { onHomeToggleChanged("showWhisper", it) }
+        )
+
+        ToggleSettingRow(
+            title = "bottom navigation dock",
+            subtitle = "show bottom micro-os quick navigation pills (search, burner, clips, settings)",
+            checked = settings.showIconDock,
+            onCheckedChange = { onHomeToggleChanged("showIconDock", it) }
         )
 
         Spacer(modifier = Modifier.height(28.dp))

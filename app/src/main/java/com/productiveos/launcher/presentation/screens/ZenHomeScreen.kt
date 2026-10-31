@@ -50,6 +50,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.productiveos.launcher.presentation.theme.AppIconSquircle
+import com.productiveos.launcher.presentation.theme.jellyPress
+import com.productiveos.launcher.util.MediaSessionHelper
+import com.productiveos.launcher.util.MusicInfo
+import androidx.compose.ui.platform.LocalContext
 import com.productiveos.launcher.data.local.AppEntity
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
@@ -93,6 +98,7 @@ fun ZenHomeScreen(
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
 
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -100,6 +106,18 @@ fun ZenHomeScreen(
             nowMillis = System.currentTimeMillis()
             val delayMs = 60_000L - (nowMillis % 60_000L)
             delay(delayMs.coerceIn(1_000L, 60_000L))
+        }
+    }
+
+    var musicInfo by remember { mutableStateOf<MusicInfo?>(null) }
+    LaunchedEffect(settings.showMusicCapsule) {
+        if (!settings.showMusicCapsule) {
+            musicInfo = null
+            return@LaunchedEffect
+        }
+        while (true) {
+            musicInfo = MediaSessionHelper.query(context)
+            delay(2000L)
         }
     }
 
@@ -185,48 +203,111 @@ fun ZenHomeScreen(
                     }
                 }
 
-                Text(
-                    text = timeFormatted,
-                    style = MaterialTheme.typography.displayLarge,
-                    color = palette.primaryText,
-                    textAlign = textAlign,
-                    modifier = Modifier.clickable(onClick = onClockClick)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = dateFormatted.lowercase(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = palette.secondaryText,
-                    textAlign = textAlign,
-                    modifier = Modifier.clickable(onClick = onDateClick)
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Screen-Time & Focus Telemetry Pill
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(palette.surface)
-                        .border(1.dp, palette.borderSubtle, RoundedCornerShape(50))
-                        .clickable(onClick = onTelemetryPillClick)
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(palette.accentDot)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                if (settings.showClock) {
                     Text(
-                        text = telemetry.formattedText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText
+                        text = timeFormatted,
+                        style = MaterialTheme.typography.displayLarge,
+                        color = palette.primaryText,
+                        textAlign = textAlign,
+                        modifier = Modifier
+                            .jellyPress(0.96f)
+                            .clickable(onClick = onClockClick)
                     )
+                }
+
+                if (settings.showDate) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = dateFormatted.lowercase(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = palette.secondaryText,
+                        textAlign = textAlign,
+                        modifier = Modifier
+                            .jellyPress(0.96f)
+                            .clickable(onClick = onDateClick)
+                    )
+                }
+
+                // Music Capsule under Time and Date
+                AnimatedVisibility(
+                    visible = settings.showMusicCapsule && musicInfo != null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    val m = musicInfo
+                    if (m != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .jellyPress(0.95f)
+                                .clip(RoundedCornerShape(50))
+                                .background(palette.surface)
+                                .border(1.dp, palette.borderSubtle, RoundedCornerShape(50))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    MediaSessionHelper.playPause(context)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (m.isPlaying) "▶" else "❚❚",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.primaryText
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            val trackText = if (m.artist.isNotBlank()) "${m.title} · ${m.artist}".lowercase() else m.title.lowercase()
+                            Text(
+                                text = trackText.take(30),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.primaryText
+                            )
+                            if (m.hasControls) {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "⏭",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = palette.secondaryText,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            MediaSessionHelper.next(context)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (settings.showTelemetry) {
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Screen-Time & Focus Telemetry Pill
+                    Row(
+                        modifier = Modifier
+                            .jellyPress(0.95f)
+                            .clip(RoundedCornerShape(50))
+                            .background(palette.surface)
+                            .border(1.dp, palette.borderSubtle, RoundedCornerShape(50))
+                            .clickable(onClick = onTelemetryPillClick)
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(palette.accentDot)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = telemetry.formattedText,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.secondaryText
+                        )
+                    }
                 }
 
                 // Focus Anchor Live Waveform Pill (when active)
@@ -239,6 +320,7 @@ fun ZenHomeScreen(
                         Row(
                             modifier = Modifier
                                 .padding(top = 8.dp)
+                                .jellyPress(0.95f)
                                 .clip(RoundedCornerShape(50))
                                 .background(palette.surfaceElevated)
                                 .border(1.dp, palette.primaryText.copy(alpha = 0.45f), RoundedCornerShape(50))
@@ -255,33 +337,36 @@ fun ZenHomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                if (settings.showWhisper) {
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // Editorial Contextual Whisper Header
-                AnimatedContent(
-                    targetState = whisperItem,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "WhisperTicker"
-                ) { item ->
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .clickable(onClick = onWhisperClick)
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "·",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.mutedText
-                        )
-                        Text(
-                            text = item.text.lowercase(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.mutedText,
-                            textAlign = textAlign
-                        )
+                    // Editorial Contextual Whisper Header
+                    AnimatedContent(
+                        targetState = whisperItem,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "WhisperTicker"
+                    ) { item ->
+                        Row(
+                            modifier = Modifier
+                                .jellyPress(0.96f)
+                                .clip(RoundedCornerShape(50))
+                                .clickable(onClick = onWhisperClick)
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "·",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.mutedText
+                            )
+                            Text(
+                                text = item.text.lowercase(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = palette.mutedText,
+                                textAlign = textAlign
+                            )
+                        }
                     }
                 }
             }
@@ -332,58 +417,68 @@ fun ZenHomeScreen(
             }
 
             // Bottom Navigation / Micro-OS Dock Trigger
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
+            if (settings.showIconDock) {
+                Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "↑ search",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText,
-                        modifier = Modifier.clickable(onClick = onSwipeUpSearch)
-                    )
-                    Text(
-                        text = "·",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.mutedText
-                    )
-                    Text(
-                        text = "burner",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText,
-                        modifier = Modifier.clickable(onClick = onOpenBurnerNote)
-                    )
-                    Text(
-                        text = "·",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.mutedText
-                    )
-                    Text(
-                        text = "clips",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText,
-                        modifier = Modifier.clickable(onClick = onOpenQuantumClip)
-                    )
-                    Text(
-                        text = "·",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.mutedText
-                    )
-                    Text(
-                        text = "settings",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText,
-                        modifier = Modifier.clickable(onClick = onLongPressEmptySpace)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "↑ search",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.secondaryText,
+                            modifier = Modifier
+                                .jellyPress(0.95f)
+                                .clickable(onClick = onSwipeUpSearch)
+                        )
+                        Text(
+                            text = "·",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.mutedText
+                        )
+                        Text(
+                            text = "burner",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.secondaryText,
+                            modifier = Modifier
+                                .jellyPress(0.95f)
+                                .clickable(onClick = onOpenBurnerNote)
+                        )
+                        Text(
+                            text = "·",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.mutedText
+                        )
+                        Text(
+                            text = "clips",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.secondaryText,
+                            modifier = Modifier
+                                .jellyPress(0.95f)
+                                .clickable(onClick = onOpenQuantumClip)
+                        )
+                        Text(
+                            text = "·",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.mutedText
+                        )
+                        Text(
+                            text = "settings",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.secondaryText,
+                            modifier = Modifier
+                                .jellyPress(0.95f)
+                                .clickable(onClick = onLongPressEmptySpace)
+                        )
+                    }
                 }
             }
         }
@@ -410,6 +505,7 @@ private fun IntentionalHoldAppRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .jellyPress(0.97f)
             .clip(RoundedCornerShape(12.dp))
             .background(if (isHolding) palette.surfaceElevated.copy(alpha = 0.6f) else Color.Transparent)
             .border(

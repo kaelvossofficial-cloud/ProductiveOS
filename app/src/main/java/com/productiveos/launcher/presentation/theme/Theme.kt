@@ -1,5 +1,6 @@
 package com.productiveos.launcher.presentation.theme
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -221,7 +222,7 @@ fun ProductiveOSTheme(
     fontScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
-    val palette = when (themeOption) {
+    val targetPalette = when (themeOption) {
         LauncherThemeOption.OLED_BLACK -> OledBlackPalette
         LauncherThemeOption.SLATE_GRAY -> SlateGrayPalette
         LauncherThemeOption.WARM_STONE -> WarmStonePalette
@@ -230,6 +231,21 @@ fun ProductiveOSTheme(
         LauncherThemeOption.OCHRE_SAND -> OchreSandPalette
         LauncherThemeOption.MIDNIGHT_NAVY -> MidnightNavyPalette
     }
+
+    // Liquid theme morph: every colour cross-fades over 600ms instead of flashing.
+    val morph = tween<Color>(durationMillis = 600)
+    val palette = ProductiveOSPalette(
+        background = animateColorAsState(targetPalette.background, morph, label = "bg").value,
+        surface = animateColorAsState(targetPalette.surface, morph, label = "surface").value,
+        surfaceElevated = animateColorAsState(targetPalette.surfaceElevated, morph, label = "surfaceElevated").value,
+        primaryText = animateColorAsState(targetPalette.primaryText, morph, label = "primaryText").value,
+        secondaryText = animateColorAsState(targetPalette.secondaryText, morph, label = "secondaryText").value,
+        mutedText = animateColorAsState(targetPalette.mutedText, morph, label = "mutedText").value,
+        borderSubtle = animateColorAsState(targetPalette.borderSubtle, morph, label = "border").value,
+        accentDot = animateColorAsState(targetPalette.accentDot, morph, label = "accent").value,
+        glowColor = animateColorAsState(targetPalette.glowColor, morph, label = "glow").value,
+        isLight = targetPalette.isLight
+    )
 
     val fontFamily = when (typographyStyle) {
         TypographyStyleOption.CLEAN_SANS -> FontFamily.SansSerif

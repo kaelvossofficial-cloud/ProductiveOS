@@ -643,6 +643,12 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun setHomeToggle(name: String, value: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setHomeToggle(name, value)
+        }
+    }
+
     fun setEnableHoldToOpen(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setEnableHoldToOpen(enabled)

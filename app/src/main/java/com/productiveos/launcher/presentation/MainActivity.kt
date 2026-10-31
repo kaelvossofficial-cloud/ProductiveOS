@@ -427,7 +427,11 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 onDoubleTapEmptySpace = {
                                                     SystemLauncherHelper.performSubtleHaptic(context)
-                                                    viewModel.toggleContrastThemeOnDoubleTap()
+                                                    if (settings.doubleTapToLock) {
+                                                        SystemLauncherHelper.lockScreen(context)
+                                                    } else {
+                                                        viewModel.toggleContrastThemeOnDoubleTap()
+                                                    }
                                                 },
                                                 onLongPressEmptySpace = {
                                                     SystemLauncherHelper.performSubtleHaptic(context)
@@ -612,6 +616,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onUpdateVaultPasscode = { passcode ->
                                         viewModel.setVaultPasscode(passcode)
+                                    },
+                                    onHomeToggleChanged = { key, value ->
+                                        viewModel.setHomeToggle(key, value)
                                     }
                                 )
                             }

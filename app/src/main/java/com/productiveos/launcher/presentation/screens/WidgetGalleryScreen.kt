@@ -1,5 +1,8 @@
 package com.productiveos.launcher.presentation.screens
 
+import com.productiveos.launcher.presentation.components.DashboardBreathingCard
+import com.productiveos.launcher.presentation.components.DashboardCalendarCard
+import com.productiveos.launcher.presentation.components.DashboardTaskListCard
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.view.View
@@ -131,6 +134,28 @@ fun WidgetGalleryScreen(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Organic Squircle Widget Stack (Calendar, Tasks, Breathing)
+        DashboardCalendarCard(
+            onOpenCalendar = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onBackToHome()
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DashboardTaskListCard(
+            onOpenTaskVault = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DashboardBreathingCard()
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // 1. Screen Time Gauge Widget
         ScreenTimeGaugeWidget(

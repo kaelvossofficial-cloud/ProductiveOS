@@ -77,26 +77,44 @@ jobs:
 
           ---
 
-          ### 🌟 What's New in v1.2.0
+          ### 🌟 What's New in v1.3.0
 
-          - 🎛️ **Swipe Left for Minimalist Widget Gallery**:
-            - **Screen Time Ring Widget**: Real-time circular arc displaying screen time and unlocks against mindful budget.
-            - **Interactive Pomodoro Focus Engine**: 25m Focus, 5m Break, 15m Rest with Start/Pause/Reset controls, progress arc, and ambient audio flow integration.
-            - **Most Used Apps Widget**: Dynamic horizontal usage bars showing your top apps by conscious attention consumed.
-            - **Important Notifications Widget**: Live filtered notifications from Messages, WhatsApp, Telegram, Gmail, and Calendar with one-tap jump to app.
-            - **Focus Graphs & Rhythm Widget**: 7-day sparkline bar trend and ProductiveOS Zen index.
-            - **Third-Party Android App Widgets**: Host any Android widget (Weather, Spotify, Notes, Stocks) wrapped inside high-end OS theme containers.
+          - 🎵 **Music Capsule under Time & Date Header**:
+            - Real-time media playback ticker directly below the home screen clock and date.
+            - Displays current track title and artist with live Play / Pause and Next Track controls.
+            - Automatically queries active Android MediaSessions and collapses gracefully when audio stops.
 
-          - 📊 **Swipe Right for Mindful Reports Dashboard**:
-            - **Daily, Weekly, and Monthly Period Selector**: Effortless navigation between timeframes.
-            - **Concentric Radial Ring Chart**: Multi-layer canvas rings mapping screen time percentage and unlock ratios.
-            - **Screen Time Over Days**: 7-day vertical bar chart with dashed 4h mindful benchmark line.
-            - **Time of Day Distribution**: Visual split between Morning (06:00–12:00), Afternoon (12:00–18:00), and Evening (18:00–24:00).
-            - **Overview by ProductiveOS**: Zen Mindful score (0–100), average gap between unlocks, and screen-off rest hours.
+          - ⚙️ **Modular Home Screen Customization Hub**:
+            - Dedicated toggle suite in Settings to show or hide every home component:
+              - Digital Clock (Time)
+              - Day & Date Subtitle
+              - Music Capsule
+              - Screen Time & Unlocks Telemetry Pill
+              - Contextual Whisper Header (Calendar, Battery, Media)
+              - Bottom Micro-OS Navigation Dock (Search, Burner, Clips, Settings)
 
-          - 🔍 **Omni-Search with Browser Recommendations**:
-            - Instant search suggestions: Google, YouTube, Wikipedia, DuckDuckGo recommendation pills.
-            - Pressing **Enter** immediately searches Google in your default browser without pre-opening any Google app.
+          - 🔒 **Double-Tap Empty Space to Lock Screen**:
+            - Integrated Android Device Policy Admin (`lockNow()`) allowing you to double tap anywhere on home screen empty space to immediately turn off and lock the display.
+            - Easily enabled or toggled from Settings.
+
+          - 💧 **Liquid Physics & Organic UI Layer**:
+            - **Elastic Jelly Press Engine (`Modifier.jellyPress()`)**: Exaggerated tactile spring physics (`dampingRatio = 0.45f`, `Spring.StiffnessLow`) applied across home items, buttons, cards, and pills.
+            - **Dynamic Squircle Geometry**: Mathematical Lamé superellipse curves (`SquircleShape`) and 12-lobed organic containers (`LobedSquircleShape`) for cards, widgets, and app glyphs.
+            - **Monochrome Adaptive Icon Squircle Engine (`AppIconSquircle`)**: Extracts monochrome adaptive icon layers and tints them with dynamic theme colors.
+            - **Liquid Theme Transitions**: 600ms animated color morphing across all palette tokens on theme switch.
+
+          - 🧩 **Organic Dashboard Widget Stack**:
+            - **Calendar Card**: Editorial monthly header + 7-day strip with highlight on current date.
+            - **Focus Task List Card**: Interactive daily priorities with circular checkboxes and completion counters.
+            - **Continuous Breathing Widget**: Hypnotic organic breathing guide scaling with `rememberInfiniteTransition` to anchor your focus.
+
+          - 📊 **Retained v1.2 Features**:
+            - Mindful Reports Dashboard (Daily/Weekly/Monthly, concentric radial ring charts, hourly usage breakdown).
+            - Widget Gallery with Pomodoro timer, Screen Time gauge, and 3rd-party widget hosting.
+            - Omni-Search with instant Google browser search recommendations.
+            - Intentional 3-second hold-to-open gate.
+            - Plain Sleek Thin Colors (Pale Sage, Tokyo Mist, Ochre Sand, Midnight Navy).
+            - Micro-OS Utilities (Quantum Clips, Focus Anchor, Micro-Log, Burner Notes).
 
           - 🛡️ **Intentional 3-Second Hold-to-Open Gate (Impulse & Mis-Touch Protection)**:
             - Apps on Zen Home will not open on accidental tap; requires holding for 3 seconds.
