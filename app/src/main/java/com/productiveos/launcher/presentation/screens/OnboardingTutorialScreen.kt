@@ -42,10 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.delay
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.util.SystemLauncherHelper
 
@@ -76,19 +73,9 @@ fun OnboardingTutorialScreen(
     }
 
     LaunchedEffect(Unit) {
-        refreshPermissions()
-    }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                refreshPermissions()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+        while (true) {
+            refreshPermissions()
+            delay(1000L)
         }
     }
 

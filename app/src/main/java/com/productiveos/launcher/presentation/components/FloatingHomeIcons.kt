@@ -139,9 +139,9 @@ fun HoldToOpenHost(
         if (showQuickActions) {
             QuickActionPopup(
                 app = app,
-                favoriteContacts = settings.favoriteContacts,
+                favorites = settings.favoriteContacts,
                 onDismiss = { showQuickActions = false },
-                onLaunchApp = {
+                onOpenApp = {
                     showQuickActions = false
                     onLaunch(app, centerInWindow)
                 },
