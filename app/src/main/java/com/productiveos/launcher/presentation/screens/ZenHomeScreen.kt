@@ -549,7 +549,7 @@ fun ZenHomeScreen(
             WaveSidebarScrubber(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(vertical = 84.dp, end = 2.dp),
+                    .padding(top = 84.dp, bottom = 84.dp, end = 2.dp),
                 compactIdleMode = true,
                 onLetterScrubbed = { /* Live wave preview */ },
                 onScrubReleased = { letter ->
