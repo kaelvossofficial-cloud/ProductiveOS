@@ -1,6 +1,7 @@
 package com.productiveos.launcher.presentation.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -52,6 +53,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+val SnappyEaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
 /** Hold duration (ms) at which the quick action capsule opens. */
 private const val QUICK_ACTION_MS = 620L

@@ -433,7 +433,7 @@ private fun PermissionCard(
             .background(palette.surface)
             .border(
                 1.dp,
-                if (isGranted) palette.accent else palette.borderSubtle,
+                if (isGranted) palette.accentDot else palette.borderSubtle,
                 RoundedCornerShape(18.dp)
             )
             .clickable { onClick() }
@@ -463,13 +463,13 @@ private fun PermissionCard(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isGranted) palette.accent.copy(alpha = 0.2f) else palette.primaryText)
+                    .background(if (isGranted) palette.accentDot.copy(alpha = 0.2f) else palette.primaryText)
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
                     text = if (isGranted) "granted ✓" else "grant →",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (isGranted) palette.accent else palette.background
+                    color = if (isGranted) palette.accentDot else palette.background
                 )
             }
         }
@@ -506,7 +506,7 @@ private fun GestureCard(
                 Text(
                     text = action,
                     style = MaterialTheme.typography.labelSmall,
-                    color = palette.accent
+                    color = palette.secondaryText
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
