@@ -2,7 +2,9 @@ package com.productiveos.launcher.data.service
 
 import android.content.ComponentName
 import android.content.Context
+import android.app.RemoteInput
 import android.content.Intent
+import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
@@ -31,11 +33,24 @@ data class ImportantNotificationData(
     val recentNotifications: List<ImportantNotificationItem> = emptyList()
 )
 
+data class QuickNotification(
+    val key: String,
+    val title: String,
+    val text: String,
+    val canReply: Boolean
+)
+
 class ProductiveNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         updateNotifications()
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        if (instance === this) instance = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -114,6 +129,48 @@ class ProductiveNotificationListenerService : NotificationListenerService() {
     }
 
     companion object {
+        @Volatile
+        private var instance: ProductiveNotificationListenerService? = null
+
+        /** Live notifications for one package (used by the quick action capsule). */
+        fun notificationsForPackage(packageName: String): List<QuickNotification> {
+            val service = instance ?: return emptyList()
+            return runCatching {
+                (service.activeNotifications ?: emptyArray())
+                    .filter { it.packageName == packageName && !it.isOngoing }
+                    .sortedByDescending { it.postTime }
+                    .mapNotNull { sbn ->
+                        val extras = sbn.notification.extras
+                        val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString().orEmpty()
+                        val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString().orEmpty()
+                        if (title.isBlank() && text.isBlank()) return@mapNotNull null
+                        val canReply = sbn.notification.actions?.any { a ->
+                            a.remoteInputs?.isNotEmpty() == true
+                        } == true
+                        QuickNotification(sbn.key, title, text, canReply)
+                    }
+                    .take(4)
+            }.getOrDefault(emptyList())
+        }
+
+        /** Sends [message] through the notification's own inline-reply action without opening the app. */
+        fun sendInlineReply(context: Context, key: String, message: String): Boolean {
+            val service = instance ?: return false
+            if (message.isBlank()) return false
+            return runCatching {
+                val sbn = service.activeNotifications?.firstOrNull { it.key == key } ?: return false
+                val action = sbn.notification.actions?.firstOrNull { a ->
+                    a.remoteInputs?.isNotEmpty() == true
+                } ?: return false
+                val remoteInputs = action.remoteInputs ?: return false
+                val fillIn = Intent()
+                val results = Bundle()
+                remoteInputs.forEach { results.putCharSequence(it.resultKey, message) }
+                RemoteInput.addResultsToIntent(remoteInputs, fillIn, results)
+                action.actionIntent.send(context, 0, fillIn)
+                true
+            }.getOrDefault(false)
+        }
         private val _notificationsFlow = MutableStateFlow(ImportantNotificationData())
         val notificationsFlow: StateFlow<ImportantNotificationData> = _notificationsFlow.asStateFlow()
 

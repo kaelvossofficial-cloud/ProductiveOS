@@ -583,6 +583,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onOpenSettings = {
                                         viewModel.openSettingsScreen()
+                                    },
+                                    onHomeToggleChanged = { key, value ->
+                                        viewModel.setHomeToggle(key, value)
                                     }
                                 )
                             }
@@ -642,6 +645,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onHomeToggleChanged = { key, value ->
                                         viewModel.setHomeToggle(key, value)
+                                    },
+                                    onAddFavoriteContact = { name, number ->
+                                        viewModel.addFavoriteContact(name, number)
+                                    },
+                                    onRemoveFavoriteContact = { index ->
+                                        viewModel.removeFavoriteContact(index)
                                     }
                                 )
                             }

@@ -643,6 +643,14 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun addFavoriteContact(name: String, number: String) {
+        viewModelScope.launch { preferencesRepository.addFavoriteContact(name, number) }
+    }
+
+    fun removeFavoriteContact(index: Int) {
+        viewModelScope.launch { preferencesRepository.removeFavoriteContact(index) }
+    }
+
     fun setHomeToggle(name: String, value: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setHomeToggle(name, value)

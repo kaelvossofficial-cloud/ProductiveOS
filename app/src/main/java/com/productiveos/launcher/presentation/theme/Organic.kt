@@ -210,18 +210,9 @@ fun DoubleBezelSquircle(
                 }
             )
             .clip(outerShape)
-            .background(palette.borderSubtle.copy(alpha = 0.28f))
-            .border(0.75.dp, palette.borderSubtle.copy(alpha = 0.75f), outerShape)
-            .padding(bezelThickness)
+            .background(if (elevated) palette.surfaceElevated else palette.surface)
+            .padding(horizontal = innerPaddingHorizontal, vertical = innerPaddingVertical)
     ) {
-        Box(
-            modifier = Modifier
-                .clip(innerShape)
-                .background(if (elevated) palette.surfaceElevated else palette.surface)
-                .border(0.75.dp, palette.primaryText.copy(alpha = 0.12f), innerShape)
-                .padding(horizontal = innerPaddingHorizontal, vertical = innerPaddingVertical)
-        ) {
-            content()
-        }
+        content()
     }
 }

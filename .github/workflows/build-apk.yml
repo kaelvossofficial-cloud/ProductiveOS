@@ -77,48 +77,42 @@ jobs:
 
           ---
 
-          ### 🌟 What's New in v1.4.0 (Senior UI/UX Choreography & Tactile Upgrade)
+          ### 🌟 What's New in v1.5.0 (Magical Glow, Floating Google Shapes & Quick Actions)
 
-          - 🕸️ **Interactive Kinetic Background Grid Canvas (`InteractiveGridCanvas`)**:
-            - Hardware-accelerated geometric dot & precision crosshair (`+`) matrix behind the Home Screen and Search Drawer.
-            - **Magnetic Touch Well**: Grid points near your finger displace radially with spring physics and brighten dynamically.
-            - **Hold-to-Open Resonance Ring**: Holding an app broadcasts an expanding concentric wave across the background lattice.
+          - 🌸 **Floating Google-Shaped Icons & Real-Time Gravity Tilt Physics**:
+            - App icons on the Home Screen can now float in iconic Google-themed geometric shapes: **Cookie, Flower, Clover, Sunny, Soft Triangle, Squircle, and Pebble**.
+            - Integrated real-time hardware accelerometer & gravity sensor physics (`rememberTilt`): tilting or holding your phone upside down applies a smooth organic parallax tilt and floating momentum to all on-screen elements.
+            - Organic harmonic bobbing animation for icons on the home screen.
 
-          - ⏳ **Asymmetric "Long-Touch Pause" Liquid Fill Ritual**:
-            - Replaced small spinner with a **Full-Row Liquid Clip-Path Progress Sweep** (`0% -> 100%` width) and glowing meniscus edge.
-            - **Asymmetric Enter/Exit Timing**: Deliberate linear progression during hold with rhythmic 600ms haptic ticks; snappy `180ms` custom `--ease-out` (`CubicBezierEasing(0.23, 1, 0.32, 1)`) bounce-back on early release.
-            - **Peripheral Focus Dimming**: Non-held apps smoothly dim to `32%` opacity while holding an app so your attention stays anchored.
+          - ✨ **Magical Radial Glowing Halo & Launch Bloom**:
+            - Holding any app or pressing empty wallpaper triggers an expansive, luminous halo glow around your thumb tip (`Modifier.holdGlow`).
+            - Reaching full hold completion bursts into a radial launch bloom transition before opening the application.
 
-          - 🌊 **Gaussian Sine-Wave Right-Edge Sidebar (`WaveSidebarScrubber`)**:
-            - Available on **both** the Zen Home Screen and Search Drawer.
-            - Scrubbing vertically along the right edge bends adjacent letters (`A–Z`) outward in a smooth Gaussian bell curve (`46dp` crest) with dynamic font scaling and a floating Double-Bezel squircle preview badge.
-            - Releasing on any letter from the Home Screen immediately jumps into the Search Drawer filtered to that letter.
+          - ⚡ **Productive Quick Action Capsules & Direct In-Launcher Reply**:
+            - Holding down on an app icon surfaces an instant, sleek action capsule:
+              - **WhatsApp / Telegram**: Instant direct chat shortcuts to your favorite VIP contacts without searching through the app.
+              - **Phone / SMS**: 1-tap call & message shortcuts to favorite contacts.
+              - **System Apps**: Quick actions for Camera (Photo/Video), Clock (Set Timer), Calendar (New Event), and Email.
+              - **Live Notification Stream & Inline Reply**: View pending notifications from that app and type/send replies directly from the home screen using `RemoteInput` without opening the app!
+            - Manage your VIP Favorite Contacts easily in Launcher Settings.
 
-          - 🚀 **Origin-Aware Scale-95 Transitions & Waterfall Stagger**:
-            - Screen transitions now combine custom iOS/Linear-grade drawer curves (`CubicBezierEasing(0.32, 0.72, 0, 1)`) with `scaleIn(0.95f -> 1f)`.
-            - Search drawer app rows cascade in with a `28ms` per-item waterfall reveal (`translationY` + `alpha`) without blocking immediate touch input.
+          - 🪟 **Plain Sleek Minimalist Capsules**:
+            - Stripped away artificial borders, excessive strokes, and AI-like container artifacts in favor of clean, architectural surfaces with subtle tinted backdrops.
 
-          - 🛡️ **Double-Bezel ("Doppelrand") Hardware Enclosures (`DoubleBezelSquircle`)**:
-            - Upgraded the Music Capsule, Telemetry Pill, Bottom Micro-OS Dock, Omni-Search bar, and Dashboard Widget Cards to nested Outer Shell + Inner Core squircle enclosures with specular inner borders.
+          - 📜 **Animated App Drawer Grid Mode with Edge Scale & Sink Physics**:
+            - Added an animated 4-column icon grid mode in the App Drawer (`LazyVerticalGrid`).
+            - Physics-driven scroll transforms: icons smoothly scale and sink as they roll into and out of the viewport edges.
+            - Easily toggle between classic Editorial List and Organic Grid views right from the search header or Settings.
 
-          - 📊 **Retained v1.2 Features**:
-            - Mindful Reports Dashboard (Daily/Weekly/Monthly, concentric radial ring charts, hourly usage breakdown).
-            - Widget Gallery with Pomodoro timer, Screen Time gauge, and 3rd-party widget hosting.
-            - Omni-Search with instant Google browser search recommendations.
-            - Intentional 3-second hold-to-open gate.
-            - Plain Sleek Thin Colors (Pale Sage, Tokyo Mist, Ochre Sand, Midnight Navy).
-            - Micro-OS Utilities (Quantum Clips, Focus Anchor, Micro-Log, Burner Notes).
+          - 🚀 **Buttery-Smooth Upward Velocity Pull & Seamless Scrubber**:
+            - High-refresh rate gesture handling for pulling up the App Drawer with realistic finger momentum and spring snap.
+            - Spring-damped wave physics on the right-edge alphabetical scrubber.
+            - Empty screen long-press ritual with expanding glow to open Launcher Settings.
 
-          - 🛡️ **Intentional 3-Second Hold-to-Open Gate (Impulse & Mis-Touch Protection)**:
-            - Apps on Zen Home will not open on accidental tap; requires holding for 3 seconds.
-            - Progressive countdown ring with tactile tick feedback. Configurable (1s, 2s, 3s or instant tap) in Settings.
-
-          - 🎨 **Plain Sleek Thin Colors Themes**:
-            - New editorial palettes: **Pale Sage** (\`#EAEFE9\`), **Tokyo Mist** (\`#E9EEF3\`), **Ochre Sand** (\`#F5EFE6\`), and **Midnight Navy** (\`#0B101B\`).
-            - High-contrast typography and ultra-thin \`0.75dp\` borders based on the UI/UX Pro Max standard.
-
-          - ⚡ **Retained Micro-OS Utilities**:
-            - Quantum Clip Vault, Focus Anchor ambient generator, Micro-Log second-brain capture, Burner Notes 24h ephemeral scratchpad, and PathCheck impulse gate.
+          - 🛡️ **Retained Features from v1.4.0 & Prior**:
+            - Interactive background dot/crosshair lattice grid.
+            - Micro-OS Utilities (Quantum Clip, Focus Anchor, Micro-Log, Burner Notes, PathCheck).
+            - Mindful reports dashboard, widget gallery, and Pomodoro focus tracker.
 
           ---
 

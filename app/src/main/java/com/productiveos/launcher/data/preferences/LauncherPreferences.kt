@@ -43,6 +43,8 @@ enum class LauncherThemeOption(val title: String, val hexLabel: String) {
         get() = this == WARM_STONE || this == PALE_SAGE || this == TOKYO_MIST || this == OCHRE_SAND
 }
 
+data class FavoriteContact(val name: String, val number: String)
+
 data class LauncherSettings(
     val textAlignment: TextAlignmentOption = TextAlignmentOption.LEFT,
     val typographyStyle: TypographyStyleOption = TypographyStyleOption.CLEAN_SANS,
@@ -61,6 +63,9 @@ data class LauncherSettings(
     val doubleTapToLock: Boolean = false,
     val showInteractiveGrid: Boolean = true,
     val showHomeEdgeSidebar: Boolean = true,
+    val floatingHomeIcons: Boolean = true,
+    val drawerGridMode: Boolean = true,
+    val favoriteContacts: List<FavoriteContact> = emptyList(),
     val enableHoldToOpen: Boolean = true,
     val holdToOpenSeconds: Int = 3,
     val installedWidgetIds: List<Int> = emptyList(),
@@ -99,6 +104,9 @@ class LauncherPreferencesRepository @Inject constructor(
         val DOUBLE_TAP_TO_LOCK = booleanPreferencesKey("double_tap_to_lock")
         val SHOW_INTERACTIVE_GRID = booleanPreferencesKey("show_interactive_grid")
         val SHOW_HOME_EDGE_SIDEBAR = booleanPreferencesKey("show_home_edge_sidebar")
+        val FLOATING_HOME_ICONS = booleanPreferencesKey("floating_home_icons")
+        val DRAWER_GRID_MODE = booleanPreferencesKey("drawer_grid_mode")
+        val FAVORITE_CONTACTS = stringPreferencesKey("favorite_contacts")
         val ENABLE_HOLD_TO_OPEN = booleanPreferencesKey("enable_hold_to_open")
         val HOLD_TO_OPEN_SECONDS = intPreferencesKey("hold_to_open_seconds")
         val INSTALLED_WIDGET_IDS = stringPreferencesKey("installed_widget_ids")
@@ -151,6 +159,9 @@ class LauncherPreferencesRepository @Inject constructor(
             doubleTapToLock = prefs[Keys.DOUBLE_TAP_TO_LOCK] ?: false,
             showInteractiveGrid = prefs[Keys.SHOW_INTERACTIVE_GRID] ?: true,
             showHomeEdgeSidebar = prefs[Keys.SHOW_HOME_EDGE_SIDEBAR] ?: true,
+            floatingHomeIcons = prefs[Keys.FLOATING_HOME_ICONS] ?: true,
+            drawerGridMode = prefs[Keys.DRAWER_GRID_MODE] ?: true,
+            favoriteContacts = decodeFavorites(prefs[Keys.FAVORITE_CONTACTS]),
             enableHoldToOpen = prefs[Keys.ENABLE_HOLD_TO_OPEN] ?: true,
             holdToOpenSeconds = prefs[Keys.HOLD_TO_OPEN_SECONDS] ?: 3,
             installedWidgetIds = widgetIds,
@@ -229,6 +240,8 @@ class LauncherPreferencesRepository @Inject constructor(
             "doubleTapToLock" -> Keys.DOUBLE_TAP_TO_LOCK
             "showInteractiveGrid" -> Keys.SHOW_INTERACTIVE_GRID
             "showHomeEdgeSidebar" -> Keys.SHOW_HOME_EDGE_SIDEBAR
+            "floatingHomeIcons" -> Keys.FLOATING_HOME_ICONS
+            "drawerGridMode" -> Keys.DRAWER_GRID_MODE
             else -> return
         }
         context.dataStore.edit { it[key] = value }
@@ -310,6 +323,35 @@ class LauncherPreferencesRepository @Inject constructor(
                 prefs[Keys.BURNER_NOTE_TEXT] = ""
                 prefs[Keys.BURNER_NOTE_UPDATED_AT] = 0L
             }
+        }
+    }
+
+    private fun decodeFavorites(raw: String?): List<FavoriteContact> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split(";").mapNotNull { entry ->
+            val parts = entry.split("|")
+            if (parts.size == 2 && parts[1].isNotBlank()) FavoriteContact(parts[0], parts[1]) else null
+        }
+    }
+
+    private fun encodeFavorites(list: List<FavoriteContact>): String =
+        list.joinToString(";") { "${it.name.replace(";", " ").replace("|", " ")}|${it.number.filter { ch -> ch.isDigit() || ch == '+' }}" }
+
+    suspend fun addFavoriteContact(name: String, number: String) {
+        val cleanNumber = number.filter { it.isDigit() || it == '+' }
+        if (cleanNumber.isBlank()) return
+        context.dataStore.edit { prefs ->
+            val existing = decodeFavorites(prefs[Keys.FAVORITE_CONTACTS])
+            val label = name.trim().ifBlank { cleanNumber }
+            prefs[Keys.FAVORITE_CONTACTS] = encodeFavorites((existing + FavoriteContact(label, cleanNumber)).takeLast(8))
+        }
+    }
+
+    suspend fun removeFavoriteContact(index: Int) {
+        context.dataStore.edit { prefs ->
+            val existing = decodeFavorites(prefs[Keys.FAVORITE_CONTACTS]).toMutableList()
+            if (index in existing.indices) existing.removeAt(index)
+            prefs[Keys.FAVORITE_CONTACTS] = encodeFavorites(existing)
         }
     }
 

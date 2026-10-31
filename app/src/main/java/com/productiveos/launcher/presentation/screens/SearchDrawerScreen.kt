@@ -1,19 +1,18 @@
 package com.productiveos.launcher.presentation.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,10 +25,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -66,8 +68,12 @@ import com.productiveos.launcher.data.local.AppEntity
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
 import com.productiveos.launcher.presentation.components.InteractiveGridCanvas
+import com.productiveos.launcher.presentation.components.ShapedAppIcon
+import com.productiveos.launcher.presentation.components.SnappyEaseOut
 import com.productiveos.launcher.presentation.components.WaveSidebarScrubber
+import com.productiveos.launcher.presentation.components.rememberTilt
 import com.productiveos.launcher.presentation.theme.DoubleBezelSquircle
+import com.productiveos.launcher.presentation.theme.GoogleShape
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.SquircleShape
 import com.productiveos.launcher.presentation.theme.jellyPress
@@ -75,8 +81,6 @@ import com.productiveos.launcher.presentation.theme.tactilePress
 import com.productiveos.launcher.util.OmniSearchResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-private val StaggerEaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
 @Composable
 fun SearchDrawerScreen(
@@ -90,14 +94,17 @@ fun SearchDrawerScreen(
     onOmniClick: (OmniSearchResult) -> Unit,
     onBrowserEngineSearch: (query: String, engine: String) -> Unit = { _, _ -> },
     onCloseDrawer: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onHomeToggleChanged: (String, Boolean) -> Unit = { _, _ -> }
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val tilt = rememberTilt(enabled = settings.showInteractiveGrid)
 
     var isEntered by remember { mutableStateOf(false) }
     var activeTouchPoint by remember { mutableStateOf<Offset?>(null) }
@@ -110,6 +117,13 @@ fun SearchDrawerScreen(
             keyboardController?.show()
         }
     }
+
+    // One state for the whole list entrance (no per-row animation state => smooth scrolling).
+    val entrance by animateFloatAsState(
+        targetValue = if (isEntered) 1f else 0f,
+        animationSpec = tween(durationMillis = 320, easing = SnappyEaseOut),
+        label = "DrawerEntrance"
+    )
 
     val textAlign = when (settings.textAlignment) {
         TextAlignmentOption.LEFT -> TextAlign.Start
@@ -132,15 +146,13 @@ fun SearchDrawerScreen(
                             searchSwipeOffset = 0f
                         },
                         onDragCancel = { searchSwipeOffset = 0f },
-                        onHorizontalDrag = { _, dragAmount ->
-                            searchSwipeOffset += dragAmount
-                        }
+                        onHorizontalDrag = { _, dragAmount -> searchSwipeOffset += dragAmount }
                     )
                 },
-            outerRadius = 18.dp,
-            bezelThickness = 1.5.dp,
-            innerPaddingHorizontal = 16.dp,
-            innerPaddingVertical = 13.dp
+            outerRadius = 20.dp,
+            innerPaddingHorizontal = 18.dp,
+            innerPaddingVertical = 14.dp,
+            elevated = true
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -182,27 +194,17 @@ fun SearchDrawerScreen(
                     )
                 }
 
-                if (query.isNotEmpty()) {
-                    Text(
-                        text = "clear",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText,
-                        modifier = Modifier
-                            .padding(start = 10.dp)
-                            .jellyPress(0.95f)
-                            .clickable { onQueryChange("") }
-                    )
-                } else {
-                    Text(
-                        text = "close",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.secondaryText,
-                        modifier = Modifier
-                            .padding(start = 10.dp)
-                            .jellyPress(0.95f)
-                            .clickable(onClick = onCloseDrawer)
-                    )
-                }
+                Text(
+                    text = if (query.isNotEmpty()) "clear" else "close",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette.secondaryText,
+                    modifier = Modifier
+                        .padding(start = 10.dp)
+                        .jellyPress(0.95f)
+                        .clickable {
+                            if (query.isNotEmpty()) onQueryChange("") else onCloseDrawer()
+                        }
+                )
             }
         }
     }
@@ -215,11 +217,9 @@ fun SearchDrawerScreen(
                 awaitEachGesture {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val activeChange = event.changes.firstOrNull { it.pressed }
-                        activeTouchPoint = activeChange?.position
-                        if (event.changes.none { it.pressed }) {
-                            break
-                        }
+                        val active = event.changes.firstOrNull { it.pressed }
+                        activeTouchPoint = active?.position
+                        if (active == null) break
                     }
                     activeTouchPoint = null
                 }
@@ -228,7 +228,8 @@ fun SearchDrawerScreen(
     ) {
         if (settings.showInteractiveGrid) {
             InteractiveGridCanvas(
-                touchPoint = activeTouchPoint
+                touchProvider = { activeTouchPoint },
+                tilt = tilt
             )
         }
 
@@ -242,7 +243,6 @@ fun SearchDrawerScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            // Browser Search Recommendations (Google, YouTube, Wikipedia, DuckDuckGo)
             AnimatedVisibility(
                 visible = query.isNotBlank(),
                 enter = fadeIn(),
@@ -260,20 +260,19 @@ fun SearchDrawerScreen(
                         "wikipedia" to "Wiki",
                         "duckduckgo" to "DuckDuckGo"
                     )
-                    val engineSquircle = remember { SquircleShape(10.dp) }
+                    val engineShape = remember { SquircleShape(12.dp) }
                     searchEngines.forEach { (engineKey, engineLabel) ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .jellyPress(0.95f)
-                                .clip(engineSquircle)
+                                .clip(engineShape)
                                 .background(palette.surfaceElevated)
-                                .border(0.75.dp, palette.borderSubtle, engineSquircle)
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onBrowserEngineSearch(query.trim(), engineKey)
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -286,7 +285,6 @@ fun SearchDrawerScreen(
                 }
             }
 
-            // Omni-Search Math & Bang Command Pill (Double-Bezel)
             AnimatedVisibility(
                 visible = omniResult != null,
                 enter = fadeIn(),
@@ -309,8 +307,7 @@ fun SearchDrawerScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 10.dp, end = 16.dp),
-                        outerRadius = 16.dp,
-                        bezelThickness = 1.5.dp,
+                        outerRadius = 18.dp,
                         innerPaddingHorizontal = 16.dp,
                         innerPaddingVertical = 12.dp,
                         elevated = true,
@@ -325,7 +322,6 @@ fun SearchDrawerScreen(
                 }
             }
 
-            // Quick App Count & Status Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -340,23 +336,35 @@ fun SearchDrawerScreen(
                     color = palette.mutedText
                 )
 
-                Text(
-                    text = "vault & settings →",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette.secondaryText,
-                    modifier = Modifier
-                        .jellyPress(0.95f)
-                        .clickable(onClick = onOpenSettings)
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        text = if (settings.drawerGridMode) "list" else "grid",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier
+                            .jellyPress(0.94f)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onHomeToggleChanged("drawerGridMode", !settings.drawerGridMode)
+                            }
+                    )
+                    Text(
+                        text = "vault & settings →",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier
+                            .jellyPress(0.95f)
+                            .clickable(onClick = onOpenSettings)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(
-                color = palette.borderSubtle,
+                color = palette.borderSubtle.copy(alpha = 0.5f),
                 modifier = Modifier.padding(end = 22.dp)
             )
 
-            // App Directory with Right-Edge Gaussian Sine-Wave Scrubber
             if (filteredApps.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -375,81 +383,132 @@ fun SearchDrawerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
+                        .graphicsLayer {
+                            alpha = entrance
+                            translationY = (1f - entrance) * 22.dp.toPx()
+                        }
                 ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(end = 6.dp)
-                    ) {
-                        itemsIndexed(
-                            items = filteredApps,
-                            key = { _, app -> app.packageName }
-                        ) { index, app ->
-                            // Staggered waterfall entrance for first 12 visible rows
-                            val staggerDelay = (index.coerceAtMost(12)) * 28
-                            val rowEntrance by animateFloatAsState(
-                                targetValue = if (isEntered) 1f else 0f,
-                                animationSpec = tween(
-                                    durationMillis = 240,
-                                    delayMillis = staggerDelay,
-                                    easing = StaggerEaseOut
-                                ),
-                                label = "StaggerAppRow"
-                            )
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .graphicsLayer {
-                                        alpha = rowEntrance
-                                        translationY = (1f - rowEntrance) * 18.dp.toPx()
-                                    }
-                                    .tactilePress(
-                                        minTouchHeight = true,
-                                        enableGlow = true,
-                                        onClick = { onAppClick(app) },
-                                        onLongClick = { onAppLongClick(app) }
-                                    )
-                                    .padding(vertical = 14.dp, horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = app.displayName.lowercase(),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = palette.primaryText,
-                                    textAlign = textAlign,
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    if (settings.drawerGridMode) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(4),
+                            state = gridState,
+                            contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp, end = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        ) {
+                            items(items = filteredApps, key = { it.packageName }) { app ->
+                                val shape = remember(app.packageName) {
+                                    GoogleShape.forKey(app.packageName.hashCode())
+                                }
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            // Scroll-linked motion: icons shrink, fade and sink a little
+                                            // as they approach the top / bottom edge of the viewport.
+                                            val info = gridState.layoutInfo.visibleItemsInfo
+                                                .firstOrNull { it.key == app.packageName }
+                                            if (info != null) {
+                                                val viewport = gridState.layoutInfo.viewportSize.height
+                                                    .toFloat().coerceAtLeast(1f)
+                                                val centerY = info.offset.y + info.size.height / 2f
+                                                val edge = (minOf(centerY, viewport - centerY) /
+                                                    (viewport * 0.22f)).coerceIn(0f, 1f)
+                                                val s = 0.74f + 0.26f * edge
+                                                scaleX = s
+                                                scaleY = s
+                                                alpha = 0.25f + 0.75f * edge
+                                                val direction = if (centerY < viewport / 2f) -1f else 1f
+                                                translationY = direction * (1f - edge) * 14.dp.toPx()
+                                            }
+                                        }
+                                        .tactilePress(
+                                            minTouchHeight = false,
+                                            enableGlow = false,
+                                            onClick = { onAppClick(app) },
+                                            onLongClick = { onAppLongClick(app) }
+                                        )
+                                        .padding(vertical = 2.dp)
                                 ) {
-                                    if (app.isPinned) {
-                                        Text(
-                                            text = "pinned",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = palette.mutedText
-                                        )
-                                    }
-                                    if (app.isFrictionEnabled) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .clip(CircleShape)
-                                                .background(palette.secondaryText)
-                                        )
-                                    }
+                                    ShapedAppIcon(
+                                        packageName = app.packageName,
+                                        size = 58.dp,
+                                        shape = shape.shape,
+                                        containerColor = palette.surface
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = app.displayName.lowercase(),
+                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.5.sp),
+                                        color = palette.secondaryText,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
                             }
-                            HorizontalDivider(color = palette.borderSubtle.copy(alpha = 0.35f))
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(end = 6.dp)
+                        ) {
+                            itemsIndexed(
+                                items = filteredApps,
+                                key = { _, app -> app.packageName }
+                            ) { _, app ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .tactilePress(
+                                            minTouchHeight = true,
+                                            enableGlow = true,
+                                            onClick = { onAppClick(app) },
+                                            onLongClick = { onAppLongClick(app) }
+                                        )
+                                        .padding(vertical = 14.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = app.displayName.lowercase(),
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        color = palette.primaryText,
+                                        textAlign = textAlign,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (app.isPinned) {
+                                            Text(
+                                                text = "pinned",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = palette.mutedText
+                                            )
+                                        }
+                                        if (app.isFrictionEnabled) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(palette.secondaryText)
+                                            )
+                                        }
+                                    }
+                                }
+                                HorizontalDivider(color = palette.borderSubtle.copy(alpha = 0.3f))
+                            }
                         }
                     }
 
-                    // Right-Edge Gaussian Sine-Wave Sidebar Scrubber
                     WaveSidebarScrubber(
                         compactIdleMode = false,
                         onLetterScrubbed = { letter ->
@@ -458,7 +517,10 @@ fun SearchDrawerScreen(
                                 else it.displayName.startsWith(letter, ignoreCase = true)
                             }
                             if (targetIdx >= 0) {
-                                coroutineScope.launch { listState.scrollToItem(targetIdx) }
+                                coroutineScope.launch {
+                                    if (settings.drawerGridMode) gridState.scrollToItem(targetIdx)
+                                    else listState.scrollToItem(targetIdx)
+                                }
                             }
                         }
                     )

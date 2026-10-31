@@ -76,8 +76,13 @@ fun WaveSidebarScrubber(
         label = "WaveAmplitude"
     )
 
-    val maxDisplacementPx = with(density) { 46.dp.toPx() }
-    val sigmaPx = with(density) { 52.dp.toPx() }
+    val smoothY by animateFloatAsState(
+        targetValue = fingerY,
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
+        label = "WaveFingerY"
+    )
+    val maxDisplacementPx = with(density) { 50.dp.toPx() }
+    val sigmaPx = with(density) { 64.dp.toPx() }
 
     Box(
         modifier = modifier
@@ -131,7 +136,7 @@ fun WaveSidebarScrubber(
         ) {
             alphabet.forEachIndexed { index, letter ->
                 val itemCenterY = ((index + 0.5f) / alphabet.size) * railHeightPx
-                val dy = itemCenterY - fingerY
+                val dy = itemCenterY - smoothY
                 val gaussian = if (waveAmplitudeFraction > 0.01f) {
                     exp(-(dy * dy) / (2f * sigmaPx * sigmaPx)) * waveAmplitudeFraction
                 } else {
@@ -179,7 +184,7 @@ fun WaveSidebarScrubber(
                     .offset {
                         IntOffset(
                             x = (-84).dp.roundToPx(),
-                            y = (fingerY - 27.dp.toPx()).roundToInt().coerceIn(0, (railHeightPx - 54.dp.toPx()).roundToInt().coerceAtLeast(0))
+                            y = (smoothY - 27.dp.toPx()).roundToInt().coerceIn(0, (railHeightPx - 54.dp.toPx()).roundToInt().coerceAtLeast(0))
                         )
                     }
                     .size(54.dp)

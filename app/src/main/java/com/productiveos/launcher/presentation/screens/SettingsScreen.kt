@@ -87,11 +87,15 @@ fun SettingsScreen(
     onHoldToOpenChanged: (Boolean) -> Unit = {},
     onHoldSecondsChanged: (Int) -> Unit = {},
     onRequestNotificationAccess: () -> Unit = {},
-    onHomeToggleChanged: (String, Boolean) -> Unit = { _, _ -> }
+    onHomeToggleChanged: (String, Boolean) -> Unit = { _, _ -> },
+    onAddFavoriteContact: (String, String) -> Unit = { _, _ -> },
+    onRemoveFavoriteContact: (Int) -> Unit = {}
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
     val scrollState = rememberScrollState()
+    var favoriteNameDraft by remember { mutableStateOf("") }
+    var favoriteNumberDraft by remember { mutableStateOf("") }
 
     var isVaultUnlocked by remember(settings.vaultPasscode) {
         mutableStateOf(settings.vaultPasscode.isEmpty())
@@ -333,6 +337,121 @@ fun SettingsScreen(
             checked = settings.showHomeEdgeSidebar,
             onCheckedChange = { onHomeToggleChanged("showHomeEdgeSidebar", it) }
         )
+
+        ToggleSettingRow(
+            title = "floating google-shaped icons",
+            subtitle = "pinned apps float on the home screen in cookie, flower and clover shapes and drift with phone tilt",
+            checked = settings.floatingHomeIcons,
+            onCheckedChange = { onHomeToggleChanged("floatingHomeIcons", it) }
+        )
+
+        ToggleSettingRow(
+            title = "grid app drawer",
+            subtitle = "show the app drawer as an animated scrolling icon grid instead of a text list",
+            checked = settings.drawerGridMode,
+            onCheckedChange = { onHomeToggleChanged("drawerGridMode", it) }
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // QUICK ACTION FAVORITE CONTACTS
+        SectionHeader(title = "quick action favorites")
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "hold an app a little longer to open its quick action capsule. favorites appear as one-tap chats in whatsapp, telegram, messages and phone.",
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.secondaryText
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        settings.favoriteContacts.forEachIndexed { index, contact ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${contact.name.lowercase()} · ${contact.number}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = palette.primaryText,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "remove",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette.mutedText,
+                    modifier = Modifier.clickable { onRemoveFavoriteContact(index) }
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(palette.surface)
+                    .padding(horizontal = 12.dp, vertical = 11.dp)
+            ) {
+                BasicTextField(
+                    value = favoriteNameDraft,
+                    onValueChange = { favoriteNameDraft = it },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = palette.primaryText),
+                    cursorBrush = SolidColor(palette.primaryText),
+                    decorationBox = { inner ->
+                        if (favoriteNameDraft.isEmpty()) {
+                            Text("name", style = MaterialTheme.typography.bodyMedium, color = palette.mutedText)
+                        }
+                        inner()
+                    }
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1.4f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(palette.surface)
+                    .padding(horizontal = 12.dp, vertical = 11.dp)
+            ) {
+                BasicTextField(
+                    value = favoriteNumberDraft,
+                    onValueChange = { favoriteNumberDraft = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = palette.primaryText),
+                    cursorBrush = SolidColor(palette.primaryText),
+                    decorationBox = { inner ->
+                        if (favoriteNumberDraft.isEmpty()) {
+                            Text("+91 98765 43210", style = MaterialTheme.typography.bodyMedium, color = palette.mutedText)
+                        }
+                        inner()
+                    }
+                )
+            }
+            Text(
+                text = "add",
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.primaryText,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(palette.surfaceElevated)
+                    .clickable {
+                        if (favoriteNumberDraft.any { it.isDigit() }) {
+                            onAddFavoriteContact(favoriteNameDraft, favoriteNumberDraft)
+                            favoriteNameDraft = ""
+                            favoriteNumberDraft = ""
+                        }
+                    }
+                    .padding(horizontal = 14.dp, vertical = 11.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(28.dp))
 
