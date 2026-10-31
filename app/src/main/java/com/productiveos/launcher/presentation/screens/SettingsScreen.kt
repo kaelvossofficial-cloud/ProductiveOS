@@ -65,6 +65,8 @@ fun SettingsScreen(
     onTypographySelected: (TypographyStyleOption) -> Unit,
     onThemeSelected: (LauncherThemeOption) -> Unit,
     onFontScaleChanged: (Float) -> Unit,
+    onIconScaleChanged: (Float) -> Unit = {},
+    onIconColorModeChanged: (com.productiveos.launcher.data.preferences.IconColorMode) -> Unit = {},
     onAutoLaunchChanged: (Boolean) -> Unit,
     onT9SearchChanged: (Boolean) -> Unit,
     onFrictionSecondsChanged: (Int) -> Unit,
@@ -244,6 +246,84 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        // ICON ADJUST SETTINGS & THEME HARMONIZATION
+        SectionHeader(title = "icon customization & size")
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "icon color mode",
+                style = MaterialTheme.typography.bodyLarge,
+                color = palette.primaryText
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val isMono = settings.iconColorMode == com.productiveos.launcher.data.preferences.IconColorMode.THEME_MONOCHROME
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isMono) palette.primaryText else palette.surface)
+                        .clickable { onIconColorModeChanged(com.productiveos.launcher.data.preferences.IconColorMode.THEME_MONOCHROME) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "harmonized",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isMono) palette.background else palette.primaryText
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (!isMono) palette.primaryText else palette.surface)
+                        .clickable { onIconColorModeChanged(com.productiveos.launcher.data.preferences.IconColorMode.ORIGINAL_COLOR) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "original",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (!isMono) palette.background else palette.primaryText
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "icon size adjustment",
+                style = MaterialTheme.typography.bodyLarge,
+                color = palette.primaryText
+            )
+            Text(
+                text = "${(settings.iconScale * 100).toInt()}%",
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.secondaryText
+            )
+        }
+
+        Slider(
+            value = settings.iconScale,
+            onValueChange = onIconScaleChanged,
+            valueRange = 0.70f..1.35f,
+            steps = 7,
+            colors = SliderDefaults.colors(
+                thumbColor = palette.primaryText,
+                activeTrackColor = palette.primaryText,
+                inactiveTrackColor = palette.borderSubtle
+            )
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
         // BLOCK 4, ITEM 1: GESTURES & ERGONOMICS
         SectionHeader(title = "gestures & ergonomics")
         Spacer(modifier = Modifier.height(10.dp))
@@ -373,7 +453,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "${contact.name.lowercase()} · ${contact.number}",
+                    text = "${contact.name.lowercase()} \u00B7 ${contact.number}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = palette.primaryText,
                     modifier = Modifier.weight(1f)

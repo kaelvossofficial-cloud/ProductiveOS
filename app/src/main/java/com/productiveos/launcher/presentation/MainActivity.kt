@@ -65,6 +65,7 @@ import com.productiveos.launcher.presentation.screens.ReportsDashboardScreen
 import com.productiveos.launcher.presentation.screens.SearchDrawerScreen
 import com.productiveos.launcher.presentation.screens.SettingsScreen
 import com.productiveos.launcher.presentation.screens.WidgetGalleryScreen
+import com.productiveos.launcher.presentation.screens.OnboardingTutorialScreen
 import com.productiveos.launcher.presentation.screens.ZenHomeScreen
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.ProductiveOSTheme
@@ -226,6 +227,12 @@ class MainActivity : ComponentActivity() {
                 viewModel.refreshAllState()
             }
 
+            val calendarPermissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission()
+            ) {
+                viewModel.refreshAllState()
+            }
+
             val requestDefaultHome: () -> Unit = {
                 SystemLauncherHelper.performSubtleHaptic(context)
                 runCatching {
@@ -250,12 +257,23 @@ class MainActivity : ComponentActivity() {
             ) {
                 val palette = LocalProductiveOSPalette.current
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(palette.background)
-                        .windowInsetsPadding(WindowInsets.safeDrawing)
-                ) {
+                if (!settings.hasCompletedOnboarding) {
+                    OnboardingTutorialScreen(
+                        onCompleteOnboarding = { viewModel.completeOnboarding() },
+                        onRequestDefaultHome = requestDefaultHome,
+                        onRequestUsageAccess = { SystemLauncherHelper.openUsageAccessSettings(context) },
+                        onRequestNotificationAccess = { SystemLauncherHelper.openNotificationListenerSettings(context) },
+                        onRequestCalendarAccess = {
+                            calendarPermissionLauncher.launch(android.Manifest.permission.READ_CALENDAR)
+                        }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(palette.background)
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                    ) {
                     // BLOCK 4: Scale-95 & Custom CubicBezier Screen Transitions
                     val drawerCurve = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
                     AnimatedContent(
@@ -501,6 +519,12 @@ class MainActivity : ComponentActivity() {
                                                     runCatching { appWidgetHost.deleteAppWidgetId(id) }
                                                     viewModel.removeInstalledAppWidgetId(id)
                                                 },
+                                                onOpenGoogleTasks = {
+                                                    SystemLauncherHelper.openGoogleTasksApp(context)
+                                                },
+                                                onOpenGoogleKeepNotes = {
+                                                    SystemLauncherHelper.openGoogleKeepNotesApp(context)
+                                                },
                                                 onBackToHome = {
                                                     coroutineScope.launch { pagerState.animateScrollToPage(1) }
                                                 }
@@ -607,6 +631,8 @@ class MainActivity : ComponentActivity() {
                                     onTypographySelected = { viewModel.setTypographyStyle(it) },
                                     onThemeSelected = { viewModel.setThemeOption(it) },
                                     onFontScaleChanged = { viewModel.setFontScale(it) },
+                                    onIconScaleChanged = { viewModel.setIconScale(it) },
+                                    onIconColorModeChanged = { viewModel.setIconColorMode(it) },
                                     onAutoLaunchChanged = { viewModel.setAutoLaunchSingleResult(it) },
                                     onT9SearchChanged = { viewModel.setEnableT9Search(it) },
                                     onFrictionSecondsChanged = { viewModel.setFrictionSeconds(it) },
@@ -825,6 +851,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
                 }
             }
         }

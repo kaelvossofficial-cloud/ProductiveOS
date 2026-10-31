@@ -438,7 +438,8 @@ fun SearchDrawerScreen(
                                         packageName = app.packageName,
                                         size = 58.dp,
                                         shape = shape.shape,
-                                        containerColor = palette.surface
+                                        containerColor = palette.surface,
+                                        monochromeTint = if (settings.iconColorMode == com.productiveos.launcher.data.preferences.IconColorMode.THEME_MONOCHROME) palette.primaryText else null
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
@@ -476,13 +477,26 @@ fun SearchDrawerScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        text = app.displayName.lowercase(),
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        color = palette.primaryText,
-                                        textAlign = textAlign,
+                                    val rowShape = remember(app.packageName) { GoogleShape.forKey(app.packageName.hashCode()) }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
-                                    )
+                                    ) {
+                                        ShapedAppIcon(
+                                            packageName = app.packageName,
+                                            size = 36.dp,
+                                            shape = rowShape.shape,
+                                            containerColor = palette.surface,
+                                            monochromeTint = if (settings.iconColorMode == com.productiveos.launcher.data.preferences.IconColorMode.THEME_MONOCHROME) palette.primaryText else null
+                                        )
+                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Text(
+                                            text = app.displayName.lowercase(),
+                                            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 19.sp),
+                                            color = palette.primaryText,
+                                            textAlign = textAlign
+                                        )
+                                    }
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)

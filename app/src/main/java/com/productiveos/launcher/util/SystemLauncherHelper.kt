@@ -20,6 +20,8 @@ import android.os.VibratorManager
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
+import android.app.AppOpsManager
+import androidx.core.content.ContextCompat
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.view.KeyEvent
@@ -131,6 +133,31 @@ object SystemLauncherHelper {
         }
     }
 
+    fun openGoogleTasksApp(context: Context) {
+        val packages = listOf(
+            "com.google.android.apps.tasks",
+            "org.tasks",
+            "com.ticktick.task",
+            "com.todoist"
+        )
+        for (pkg in packages) {
+            if (launchPackage(context, pkg)) return
+        }
+        searchWeb(context, "https://tasks.google.com")
+    }
+
+    fun openGoogleKeepNotesApp(context: Context) {
+        val packages = listOf(
+            "com.google.android.keep",
+            "com.google.android.apps.notes",
+            "com.samsung.android.app.notes"
+        )
+        for (pkg in packages) {
+            if (launchPackage(context, pkg)) return
+        }
+        searchWeb(context, "https://keep.google.com")
+    }
+
     fun openCalendarApp(context: Context) {
         runCatching {
             val builder = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
@@ -173,6 +200,52 @@ object SystemLauncherHelper {
             context.startActivity(intent)
         }.onFailure {
             openAppInfo(context, packageName)
+        }
+    }
+
+    fun hasUsageAccessPermission(context: Context): Boolean {
+        return runCatching {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
+            mode == AppOpsManager.MODE_ALLOWED
+        }.getOrDefault(false)
+    }
+
+    fun hasNotificationListenerPermission(context: Context): Boolean {
+        return runCatching {
+            val flat = Settings.Secure.getString(
+                context.contentResolver,
+                "enabled_notification_listeners"
+            ) ?: return false
+            flat.contains(context.packageName)
+        }.getOrDefault(false)
+    }
+
+    fun hasCalendarPermission(context: Context): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_CALENDAR
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun openNotificationListenerSettings(context: Context) {
+        runCatching {
+            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            runCatching {
+                context.startActivity(
+                    Intent(Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+            }
         }
     }
 

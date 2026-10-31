@@ -1,6 +1,5 @@
 package com.productiveos.launcher.presentation.components
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -42,10 +41,10 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.productiveos.launcher.data.local.AppEntity
+import com.productiveos.launcher.data.preferences.IconColorMode
 import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.presentation.theme.GoogleShape
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
@@ -54,29 +53,26 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-val SnappyEaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+/** Hold duration (ms) at which the quick action capsule opens. */
+private const val QUICK_ACTION_MS = 620L
 
 /**
- * Wraps any content with the full hold ritual: progress ring + magical halo, a quick-action capsule
- * at [QUICK_ACTION_MS] and launch at 100%. Content receives a progress provider (read it only in
- * draw/graphicsLayer lambdas so holding never recomposes the screen).
+ * Wraps an app row or icon with the hold-to-open gesture, radial glow halo, and quick action popup.
+ * Reports progress to the background canvas so the dot grid reacts.
  */
-const val QUICK_ACTION_MS = 750L
-
 @Composable
 fun HoldToOpenHost(
     app: AppEntity,
     settings: LauncherSettings,
     dimmed: Boolean,
     modifier: Modifier = Modifier,
-    onHoldChange: (packageName: String?, progress: Float) -> Unit,
+    onHoldChange: (String?, Float) -> Unit,
     onLaunch: (AppEntity, Offset) -> Unit,
     onMoreOptions: (AppEntity) -> Unit,
     content: @Composable (progress: () -> Float) -> Unit
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
-
     val rawTarget = remember { mutableFloatStateOf(0f) }
     val progress = remember { Animatable(0f) }
     var showQuickActions by remember { mutableStateOf(false) }
@@ -143,39 +139,47 @@ fun HoldToOpenHost(
         if (showQuickActions) {
             QuickActionPopup(
                 app = app,
-                favorites = settings.favoriteContacts,
+                favoriteContacts = settings.favoriteContacts,
                 onDismiss = { showQuickActions = false },
-                onOpenApp = {
+                onLaunchApp = {
                     showQuickActions = false
                     onLaunch(app, centerInWindow)
                 },
-                onMoreOptions = { onMoreOptions(app) }
+                onMoreOptions = {
+                    showQuickActions = false
+                    onMoreOptions(app)
+                }
             )
         }
     }
 }
 
+/**
+ * Normalized 2-column centered constellation slots for home screen icons.
+ * Confined strictly within the safe middle canvas (xFraction 0.14..0.66, yFraction 0.08..0.72)
+ * so floating icons sit clean in the center and NEVER collide with top telemetry/clock or bottom dock.
+ */
 private data class FloatSlot(
     val xFraction: Float,
     val yFraction: Float,
-    val sizeDp: Float,
+    val baseSizeDp: Float,
     val depth: Float,
     val bobMul: Int,
     val phaseShift: Float
 )
 
 private val floatSlots = listOf(
-    FloatSlot(0.06f, 0.04f, 72f, 1.0f, 1, 0.0f),
-    FloatSlot(0.60f, 0.00f, 64f, 1.4f, 2, 1.3f),
-    FloatSlot(0.32f, 0.27f, 80f, 0.7f, 1, 2.1f),
-    FloatSlot(0.02f, 0.50f, 66f, 1.2f, 2, 3.4f),
-    FloatSlot(0.66f, 0.42f, 74f, 0.9f, 1, 4.2f),
-    FloatSlot(0.34f, 0.70f, 68f, 1.3f, 2, 5.3f)
+    FloatSlot(0.16f, 0.08f, 68f, 0.8f, 1, 0.0f),
+    FloatSlot(0.62f, 0.08f, 68f, 1.1f, 2, 1.4f),
+    FloatSlot(0.16f, 0.38f, 68f, 0.9f, 1, 2.2f),
+    FloatSlot(0.62f, 0.38f, 68f, 1.2f, 2, 3.5f),
+    FloatSlot(0.16f, 0.68f, 68f, 0.8f, 1, 4.3f),
+    FloatSlot(0.62f, 0.68f, 68f, 1.0f, 2, 5.4f)
 )
 
 /**
- * Pinned apps as floating Google-shaped icons. They bob gently on their own and drift with device
- * tilt (gravity), each at its own depth, so flipping the phone visibly shifts the whole constellation.
+ * Pinned apps as floating Google-shaped icons.
+ * Confined in a clean central viewport, respecting [iconScale] and [iconColorMode].
  */
 @Composable
 fun FloatingHomeIcons(
@@ -189,26 +193,33 @@ fun FloatingHomeIcons(
     onMoreOptions: (AppEntity) -> Unit
 ) {
     val palette = LocalProductiveOSPalette.current
-    val density = LocalDensity.current
     val infinite = rememberInfiniteTransition(label = "FloatBob")
     val bobPhase = infinite.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = LinearEasing),
+            animation = tween(8000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "BobPhase"
     )
 
+    val scaleMultiplier = settings.iconScale.coerceIn(0.70f, 1.40f)
+    val monochromeTint = if (settings.iconColorMode == IconColorMode.THEME_MONOCHROME) {
+        palette.primaryText
+    } else {
+        null
+    }
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val areaWidth = maxWidth
         val areaHeight = maxHeight
+
         apps.take(floatSlots.size).forEachIndexed { index, app ->
             val slot = floatSlots[index]
-            val iconSize = slot.sizeDp.dp
+            val iconSize = (slot.baseSizeDp * scaleMultiplier).dp
             val x = (areaWidth - iconSize) * slot.xFraction
-            val y = (areaHeight - iconSize - 18.dp) * slot.yFraction
+            val y = (areaHeight - iconSize - 20.dp) * slot.yFraction
             val shape = remember(app.packageName) { GoogleShape.forKey(app.packageName.hashCode()) }
 
             HoldToOpenHost(
@@ -220,10 +231,11 @@ fun FloatingHomeIcons(
                     .graphicsLayer {
                         val t = tilt.value
                         val bob = sin(bobPhase.value * slot.bobMul + slot.phaseShift)
-                        translationX = t.x * 16.dp.toPx() * slot.depth +
-                            cos(bobPhase.value + slot.phaseShift) * 3.dp.toPx()
-                        translationY = (t.y - 0.9f) * 11.dp.toPx() * slot.depth + bob * 6.dp.toPx()
-                        rotationZ = t.x * 5f * slot.depth + bob * 1.5f
+                        // Restrained parallax range (max 9dp) so icons stay centered
+                        translationX = t.x * 9.dp.toPx() * slot.depth +
+                            cos(bobPhase.value + slot.phaseShift) * 2.dp.toPx()
+                        translationY = (t.y - 0.9f) * 7.dp.toPx() * slot.depth + bob * 4.dp.toPx()
+                        rotationZ = t.x * 3f * slot.depth + bob * 1f
                     },
                 onHoldChange = onHoldChange,
                 onLaunch = onLaunch,
@@ -238,7 +250,7 @@ fun FloatingHomeIcons(
                             .size(iconSize)
                             .graphicsLayer {
                                 val p = progress()
-                                val s = 1f - 0.07f * p
+                                val s = 1f - 0.06f * p
                                 scaleX = s
                                 scaleY = s
                             },
@@ -248,7 +260,8 @@ fun FloatingHomeIcons(
                             packageName = app.packageName,
                             size = iconSize,
                             shape = shape.shape,
-                            containerColor = palette.surface
+                            containerColor = palette.surface,
+                            monochromeTint = monochromeTint
                         )
                         Canvas(modifier = Modifier.requiredSize(iconSize + 14.dp)) {
                             val p = progress()

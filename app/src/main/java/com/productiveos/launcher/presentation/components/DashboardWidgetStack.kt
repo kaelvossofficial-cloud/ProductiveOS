@@ -1,5 +1,10 @@
 package com.productiveos.launcher.presentation.components
 
+import android.Manifest
+import android.content.ContentUris
+import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.CalendarContract
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -22,12 +27,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,17 +44,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.productiveos.launcher.presentation.theme.DoubleBezelSquircle
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
-import com.productiveos.launcher.presentation.theme.SquircleShape
 import com.productiveos.launcher.presentation.theme.jellyPress
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -68,14 +81,20 @@ fun SquircleCard(
     )
 }
 
+data class RealCalendarEvent(
+    val title: String,
+    val timeLabel: String
+)
+
 /**
- * Calendar Glance Widget: Current month + 7-day mini calendar strip.
+ * Calendar Glance Widget: Current month + 7-day mini calendar strip + Real-time Upcoming Events from Google Calendar.
  */
 @Composable
 fun DashboardCalendarCard(
     modifier: Modifier = Modifier,
     onOpenCalendar: () -> Unit
 ) {
+    val context = LocalContext.current
     val palette = LocalProductiveOSPalette.current
     val calendar = remember { Calendar.getInstance() }
     val monthTitle = remember {
@@ -96,6 +115,51 @@ fun DashboardCalendarCard(
         }
     }
 
+    var upcomingEvents by remember { mutableStateOf<List<RealCalendarEvent>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val hasPerm = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALENDAR
+            ) == PackageManager.PERMISSION_GRANTED
+            if (hasPerm) {
+                val now = System.currentTimeMillis()
+                val endOfDay = now + 24 * 3600_000L
+                val uriBuilder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+                ContentUris.appendId(uriBuilder, now)
+                ContentUris.appendId(uriBuilder, endOfDay)
+
+                val projection = arrayOf(
+                    CalendarContract.Instances.TITLE,
+                    CalendarContract.Instances.BEGIN
+                )
+
+                runCatching {
+                    context.contentResolver.query(
+                        uriBuilder.build(),
+                        projection,
+                        null,
+                        null,
+                        "${CalendarContract.Instances.BEGIN} ASC"
+                    )?.use { cursor ->
+                        val list = mutableListOf<RealCalendarEvent>()
+                        val titleIdx = cursor.getColumnIndex(CalendarContract.Instances.TITLE)
+                        val beginIdx = cursor.getColumnIndex(CalendarContract.Instances.BEGIN)
+                        val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault())
+
+                        while (cursor.moveToNext() && list.size < 3) {
+                            val title = if (titleIdx >= 0) cursor.getString(titleIdx) else "Event"
+                            val begin = if (beginIdx >= 0) cursor.getLong(beginIdx) else now
+                            list.add(RealCalendarEvent(title, timeFmt.format(Date(begin)).lowercase()))
+                        }
+                        upcomingEvents = list
+                    }
+                }
+            }
+        }
+    }
+
     SquircleCard(
         modifier = modifier,
         onClick = onOpenCalendar
@@ -112,7 +176,7 @@ fun DashboardCalendarCard(
                     color = palette.primaryText
                 )
                 Text(
-                    text = "calendar →",
+                    text = "google calendar →",
                     style = MaterialTheme.typography.labelMedium,
                     color = palette.secondaryText
                 )
@@ -159,6 +223,39 @@ fun DashboardCalendarCard(
                     }
                 }
             }
+
+            if (upcomingEvents.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "upcoming today",
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                    color = palette.mutedText
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                upcomingEvents.forEach { ev ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = ev.title.lowercase(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = palette.primaryText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = ev.timeLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.secondaryText
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -166,12 +263,13 @@ fun DashboardCalendarCard(
 data class QuickTaskItem(val id: Int, val text: String, var isDone: Boolean = false)
 
 /**
- * Editorial Task List Card with circular checkboxes.
+ * Editorial Tasks & Google Keep Notes Card with system sync integration.
  */
 @Composable
 fun DashboardTaskListCard(
     modifier: Modifier = Modifier,
-    onOpenTaskVault: () -> Unit
+    onOpenGoogleTasks: () -> Unit,
+    onOpenGoogleKeepNotes: () -> Unit
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
@@ -184,9 +282,7 @@ fun DashboardTaskListCard(
         )
     }
 
-    SquircleCard(
-        modifier = modifier
-    ) {
+    SquircleCard(modifier = modifier) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -194,16 +290,32 @@ fun DashboardTaskListCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "daily focus tasks",
+                    text = "tasks & keep notes",
                     style = MaterialTheme.typography.headlineMedium.copy(fontSize = 18.sp),
                     color = palette.primaryText
                 )
-                Text(
-                    text = "${tasks.count { it.isDone }}/${tasks.size} done",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette.secondaryText,
-                    modifier = Modifier.clickable(onClick = onOpenTaskVault)
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "keep →",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(palette.surfaceElevated)
+                            .clickable(onClick = onOpenGoogleKeepNotes)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                    Text(
+                        text = "tasks →",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.secondaryText,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(palette.surfaceElevated)
+                            .clickable(onClick = onOpenGoogleTasks)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -220,7 +332,6 @@ fun DashboardTaskListCard(
                         .padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Circular checkbox
                     Box(
                         modifier = Modifier
                             .size(20.dp)
@@ -303,8 +414,7 @@ fun DashboardBreathingCard(
             }
 
             Box(
-                modifier = Modifier
-                    .size(64.dp),
+                modifier = Modifier.size(64.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -329,4 +439,3 @@ fun DashboardBreathingCard(
         }
     }
 }
-

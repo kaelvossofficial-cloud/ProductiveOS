@@ -126,7 +126,7 @@ fun rememberTilt(enabled: Boolean = true): State<Offset> {
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
         if (enabled && manager != null && sensor != null) {
-            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME)
+            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
         }
         onDispose { manager?.unregisterListener(listener) }
     }

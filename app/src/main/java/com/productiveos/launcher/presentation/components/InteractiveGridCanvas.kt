@@ -11,12 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import kotlin.math.abs
@@ -25,11 +25,11 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * Layer 0: kinetic dot / crosshair matrix.
- *
- * All inputs are providers read per-frame (never during composition), so touching the screen or
- * holding an app redraws only this canvas and never recomposes the screen above it.
- * [tilt] adds a gentle parallax so the lattice drifts with the phone's orientation.
+ * Interactive Background Dot/Crosshair Grid Canvas.
+ * Performance-optimized:
+ * - 44dp spacing (reduces total canvas draw operations by ~55%)
+ * - Only calculates warp physics when user touches or holds
+ * - Direct Canvas batch operations
  */
 @Composable
 fun InteractiveGridCanvas(
@@ -44,7 +44,7 @@ fun InteractiveGridCanvas(
         initialValue = 0f,
         targetValue = (2 * Math.PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 9000, easing = LinearEasing),
+            animation = tween(durationMillis = 12000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "AmbientPhase"
@@ -65,30 +65,30 @@ fun InteractiveGridCanvas(
                         touchX.floatValue = t.x
                         touchY.floatValue = t.y
                     } else {
-                        touchX.floatValue += (t.x - touchX.floatValue) * 0.38f
-                        touchY.floatValue += (t.y - touchY.floatValue) * 0.38f
+                        touchX.floatValue += (t.x - touchX.floatValue) * 0.45f
+                        touchY.floatValue += (t.y - touchY.floatValue) * 0.45f
                     }
                 }
-                energy.floatValue += (target - energy.floatValue) * 0.16f
-                if (abs(energy.floatValue - target) < 0.004f) energy.floatValue = target
+                energy.floatValue += (target - energy.floatValue) * 0.22f
+                if (abs(energy.floatValue - target) < 0.005f) energy.floatValue = target
                 val h = holdProvider()
-                hold.floatValue += (h - hold.floatValue) * 0.3f
+                hold.floatValue += (h - hold.floatValue) * 0.35f
             }
         }
     }
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        val spacingPx = 30.dp.toPx()
-        val baseDotRadius = 1.25.dp.toPx()
-        val wellRadiusPx = 125.dp.toPx()
-        val maxWarpPx = 11.dp.toPx()
+        val spacingPx = 44.dp.toPx()
+        val baseDotRadius = 1.2.dp.toPx()
+        val wellRadiusPx = 110.dp.toPx()
+        val maxWarpPx = 9.dp.toPx()
 
         val cols = (size.width / spacingPx).toInt() + 2
         val rows = (size.height / spacingPx).toInt() + 2
 
         val tiltOffset = tilt?.value ?: Offset.Zero
-        val parallaxX = tiltOffset.x * 7.dp.toPx()
-        val parallaxY = (tiltOffset.y - 0.9f) * 5.dp.toPx()
+        val parallaxX = tiltOffset.x * 5.dp.toPx()
+        val parallaxY = (tiltOffset.y - 0.9f) * 4.dp.toPx()
 
         val offsetX = (size.width - (cols - 1) * spacingPx) / 2f + parallaxX
         val offsetY = (size.height - (rows - 1) * spacingPx) / 2f + parallaxY
@@ -100,7 +100,8 @@ fun InteractiveGridCanvas(
         val phase = ambientPhase.value
 
         val holdWaveRadius = holdProgress * size.maxDimension * 0.65f
-        val holdBandWidth = 65.dp.toPx()
+        val holdBandWidth = 60.dp.toPx()
+        val hasTouchOrHold = touchEnergy > 0.02f || holdProgress > 0.02f
 
         for (r in 0 until rows) {
             val baseY = offsetY + r * spacingPx
@@ -110,42 +111,42 @@ fun InteractiveGridCanvas(
                 val wave = sin(phase + (c * 0.35f) + (r * 0.25f))
                 var drawX = baseX
                 var drawY = baseY
-                var alpha = (0.11f + 0.04f * wave).coerceIn(0.05f, 0.25f)
+                var alpha = (0.09f + 0.035f * wave).coerceIn(0.04f, 0.20f)
                 var dotRadius = baseDotRadius
 
-                if (touchEnergy > 0.01f || holdProgress > 0.01f) {
+                if (hasTouchOrHold) {
                     val dx = baseX - tX
                     val dy = baseY - tY
                     val dist = hypot(dx, dy).coerceAtLeast(1f)
 
-                    if (dist < wellRadiusPx * 1.6f && touchEnergy > 0.01f) {
+                    if (dist < wellRadiusPx * 1.5f && touchEnergy > 0.02f) {
                         val norm = dist / wellRadiusPx
                         val gaussian = exp(-norm * norm * 1.4f) * touchEnergy
                         val push = maxWarpPx * gaussian
                         drawX += (dx / dist) * push
                         drawY += (dy / dist) * push
-                        alpha += 0.28f * gaussian
-                        dotRadius += baseDotRadius * 0.75f * gaussian
+                        alpha += 0.25f * gaussian
+                        dotRadius += baseDotRadius * 0.7f * gaussian
                     }
 
-                    if (holdProgress > 0.01f) {
+                    if (holdProgress > 0.02f) {
                         val ringDist = abs(dist - holdWaveRadius)
                         if (ringDist < holdBandWidth) {
                             val ringFactor = (1f - (ringDist / holdBandWidth)) * holdProgress
-                            alpha += 0.38f * ringFactor
-                            dotRadius += baseDotRadius * 0.9f * ringFactor
-                            val ripplePush = 6.dp.toPx() * ringFactor
+                            alpha += 0.32f * ringFactor
+                            dotRadius += baseDotRadius * 0.8f * ringFactor
+                            val ripplePush = 5.dp.toPx() * ringFactor
                             drawX += (dx / dist) * ripplePush
                             drawY += (dy / dist) * ripplePush
                         }
                     }
                 }
 
-                val isCrosshair = (r % 4 == 0) && (c % 4 == 0)
-                val finalColor = palette.primaryText.copy(alpha = alpha.coerceIn(0.04f, 0.65f))
+                val isCrosshair = (r % 3 == 0) && (c % 3 == 0)
+                val finalColor = palette.primaryText.copy(alpha = alpha.coerceIn(0.04f, 0.60f))
 
                 if (isCrosshair) {
-                    val arm = dotRadius * 2.4f
+                    val arm = dotRadius * 2.2f
                     drawLine(
                         color = finalColor,
                         start = Offset(drawX - arm, drawY),
@@ -164,12 +165,12 @@ fun InteractiveGridCanvas(
             }
         }
 
-        if (holdProgress > 0.02f) {
+        if (holdProgress > 0.03f) {
             drawCircle(
-                color = palette.primaryText.copy(alpha = (1f - holdProgress) * 0.22f),
+                color = palette.primaryText.copy(alpha = (1f - holdProgress) * 0.20f),
                 radius = holdWaveRadius,
                 center = Offset(tX, tY),
-                style = Stroke(width = 1.25.dp.toPx())
+                style = Stroke(width = 1.2.dp.toPx())
             )
         }
     }

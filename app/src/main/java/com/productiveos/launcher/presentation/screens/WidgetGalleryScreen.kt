@@ -83,6 +83,8 @@ fun WidgetGalleryScreen(
     onRequestUsageAccess: () -> Unit,
     onAddCustomWidgetClick: () -> Unit,
     onRemoveCustomWidgetClick: (Int) -> Unit,
+    onOpenGoogleTasks: () -> Unit = {},
+    onOpenGoogleKeepNotes: () -> Unit = {},
     onBackToHome: () -> Unit
 ) {
     val palette = LocalProductiveOSPalette.current
@@ -146,8 +148,13 @@ fun WidgetGalleryScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         DashboardTaskListCard(
-            onOpenTaskVault = {
+            onOpenGoogleTasks = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onOpenGoogleTasks()
+            },
+            onOpenGoogleKeepNotes = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onOpenGoogleKeepNotes()
             }
         )
 

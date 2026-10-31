@@ -613,6 +613,24 @@ class LauncherViewModel @Inject constructor(
         }
     }
 
+    fun setIconScale(scale: Float) {
+        viewModelScope.launch {
+            preferencesRepository.setIconScale(scale)
+        }
+    }
+
+    fun setIconColorMode(mode: com.productiveos.launcher.data.preferences.IconColorMode) {
+        viewModelScope.launch {
+            preferencesRepository.setIconColorMode(mode)
+        }
+    }
+
+    fun completeOnboarding() {
+        viewModelScope.launch {
+            preferencesRepository.setHasCompletedOnboarding(true)
+        }
+    }
+
     fun setFontScale(scale: Float) {
         viewModelScope.launch {
             preferencesRepository.setFontScale(scale)

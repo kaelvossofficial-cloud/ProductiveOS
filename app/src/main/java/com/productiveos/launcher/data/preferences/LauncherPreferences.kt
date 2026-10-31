@@ -43,6 +43,11 @@ enum class LauncherThemeOption(val title: String, val hexLabel: String) {
         get() = this == WARM_STONE || this == PALE_SAGE || this == TOKYO_MIST || this == OCHRE_SAND
 }
 
+enum class IconColorMode(val label: String) {
+    THEME_MONOCHROME("Theme Harmonized"),
+    ORIGINAL_COLOR("Original Colors")
+}
+
 data class FavoriteContact(val name: String, val number: String)
 
 data class LauncherSettings(
@@ -50,6 +55,9 @@ data class LauncherSettings(
     val typographyStyle: TypographyStyleOption = TypographyStyleOption.CLEAN_SANS,
     val themeOption: LauncherThemeOption = LauncherThemeOption.OLED_BLACK,
     val fontScale: Float = 1.0f,
+    val iconScale: Float = 1.0f,
+    val iconColorMode: IconColorMode = IconColorMode.THEME_MONOCHROME,
+    val hasCompletedOnboarding: Boolean = false,
     val autoLaunchSingleResult: Boolean = true,
     val enableT9Search: Boolean = true,
     val frictionSeconds: Int = 3,
@@ -64,7 +72,7 @@ data class LauncherSettings(
     val showInteractiveGrid: Boolean = true,
     val showHomeEdgeSidebar: Boolean = true,
     val floatingHomeIcons: Boolean = true,
-    val drawerGridMode: Boolean = true,
+    val drawerGridMode: Boolean = false,
     val favoriteContacts: List<FavoriteContact> = emptyList(),
     val enableHoldToOpen: Boolean = true,
     val holdToOpenSeconds: Int = 3,
@@ -91,6 +99,9 @@ class LauncherPreferencesRepository @Inject constructor(
         val TYPOGRAPHY_STYLE = stringPreferencesKey("typography_style")
         val THEME_OPTION = stringPreferencesKey("theme_option")
         val FONT_SCALE = floatPreferencesKey("font_scale")
+        val ICON_SCALE = floatPreferencesKey("icon_scale")
+        val ICON_COLOR_MODE = stringPreferencesKey("icon_color_mode")
+        val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
         val AUTO_LAUNCH_SINGLE = booleanPreferencesKey("auto_launch_single")
         val ENABLE_T9_SEARCH = booleanPreferencesKey("enable_t9_search")
         val FRICTION_SECONDS = intPreferencesKey("friction_seconds")
@@ -146,6 +157,9 @@ class LauncherPreferencesRepository @Inject constructor(
             typographyStyle = typography,
             themeOption = theme,
             fontScale = prefs[Keys.FONT_SCALE] ?: 1.0f,
+            iconScale = prefs[Keys.ICON_SCALE] ?: 1.0f,
+            iconColorMode = prefs[Keys.ICON_COLOR_MODE]?.let { runCatching { IconColorMode.valueOf(it) }.getOrNull() } ?: IconColorMode.THEME_MONOCHROME,
+            hasCompletedOnboarding = prefs[Keys.HAS_COMPLETED_ONBOARDING] ?: false,
             autoLaunchSingleResult = prefs[Keys.AUTO_LAUNCH_SINGLE] ?: true,
             enableT9Search = prefs[Keys.ENABLE_T9_SEARCH] ?: true,
             frictionSeconds = prefs[Keys.FRICTION_SECONDS] ?: 3,
@@ -160,7 +174,7 @@ class LauncherPreferencesRepository @Inject constructor(
             showInteractiveGrid = prefs[Keys.SHOW_INTERACTIVE_GRID] ?: true,
             showHomeEdgeSidebar = prefs[Keys.SHOW_HOME_EDGE_SIDEBAR] ?: true,
             floatingHomeIcons = prefs[Keys.FLOATING_HOME_ICONS] ?: true,
-            drawerGridMode = prefs[Keys.DRAWER_GRID_MODE] ?: true,
+            drawerGridMode = prefs[Keys.DRAWER_GRID_MODE] ?: false,
             favoriteContacts = decodeFavorites(prefs[Keys.FAVORITE_CONTACTS]),
             enableHoldToOpen = prefs[Keys.ENABLE_HOLD_TO_OPEN] ?: true,
             holdToOpenSeconds = prefs[Keys.HOLD_TO_OPEN_SECONDS] ?: 3,
@@ -207,6 +221,18 @@ class LauncherPreferencesRepository @Inject constructor(
             }
             prefs[Keys.THEME_OPTION] = next.name
         }
+    }
+
+    suspend fun setIconScale(scale: Float) {
+        context.dataStore.edit { it[Keys.ICON_SCALE] = scale.coerceIn(0.70f, 1.40f) }
+    }
+
+    suspend fun setIconColorMode(mode: IconColorMode) {
+        context.dataStore.edit { it[Keys.ICON_COLOR_MODE] = mode.name }
+    }
+
+    suspend fun setHasCompletedOnboarding(completed: Boolean) {
+        context.dataStore.edit { it[Keys.HAS_COMPLETED_ONBOARDING] = completed }
     }
 
     suspend fun setFontScale(scale: Float) {
