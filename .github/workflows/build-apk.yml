@@ -47,7 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tail -n 150 build.log > failure_snippet.txt
+          grep -E "(e: |error:|FAILED)" build.log -A 5 -B 1 > failure_snippet.txt || tail -n 200 build.log > failure_snippet.txt
           gh release delete "ci-debug" --yes || true
           gh release create "ci-debug" failure_snippet.txt \
             --title "CI Debug Failure" \
