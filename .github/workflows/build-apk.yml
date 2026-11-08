@@ -37,7 +37,10 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
+          ./gradlew assembleDebug --stacktrace > build.log 2>&1 || (echo "Retrying assembleDebug after network glitch..." && sleep 5 && ./gradlew assembleDebug --stacktrace > build.log 2>&1) || {
+            tail -n 300 build.log
+            exit 1
+          }
 
       - name: Expose Failure Log via Release
         if: failure()
