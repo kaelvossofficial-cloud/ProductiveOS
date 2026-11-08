@@ -1362,8 +1362,10 @@ private fun MindfulAndFocusTab(
         elevated = true,
         accentHighlight = true
     ) {
-        val total = (weeklyAwareness.intentionalCount + weeklyAwareness.habitualCount).coerceAtLeast(1)
-        val intentionalRatio = weeklyAwareness.intentionalCount.toFloat() / total.toFloat()
+        val intentionalRatio = (weeklyAwareness.needInfoPct.toFloat() / 100f).coerceIn(0f, 1f)
+        val intentionalChecks = ((weeklyAwareness.needInfoPct * weeklyAwareness.totalChecks) / 100)
+        val habitChecks = ((weeklyAwareness.habitPct * weeklyAwareness.totalChecks) / 100)
+        val boredomChecks = (weeklyAwareness.totalChecks - intentionalChecks - habitChecks).coerceAtLeast(0)
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1372,13 +1374,13 @@ private fun MindfulAndFocusTab(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${(intentionalRatio * 100).roundToInt()}% Intentional",
+                    text = "${weeklyAwareness.needInfoPct}% Intentional",
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Medium),
                     color = palette.primaryText
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${weeklyAwareness.intentionalCount} mindful · ${weeklyAwareness.habitualCount} habit · ${weeklyAwareness.cancelledCount} resisted",
+                    text = "${intentionalChecks} mindful \u00B7 ${habitChecks} habit \u00B7 ${boredomChecks} boredom (${weeklyAwareness.totalChecks} checks)",
                     style = MaterialTheme.typography.labelMedium,
                     color = palette.secondaryText
                 )
@@ -1429,7 +1431,7 @@ private fun MindfulAndFocusTab(
                     )
                 }
                 Text(
-                    text = "${weeklyAwareness.cancelledCount}✓",
+                    text = "${weeklyAwareness.totalChecks}\u2713",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = palette.accentPrimary
                 )
@@ -1649,7 +1651,6 @@ private fun VaultAndSystemTab(
     onOpenQuantumClip: () -> Unit,
     onOpenMicroLog: () -> Unit,
     onOpenBurnerNote: () -> Unit,
-    onReplayOnboarding: () -> Unit = {},
     onUnhideApp: (AppEntity) -> Unit,
     onLaunchHiddenApp: (AppEntity) -> Unit,
     onUpdateVaultPasscode: (String) -> Unit,
