@@ -37,19 +37,16 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          ./gradlew assembleDebug --stacktrace > build.log 2>&1 || {
-            echo "Gradle build failed"
-            exit 1
-          }
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build.log
 
       - name: Expose Failure Log via Release
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          grep -E "(e: |error:|FAILED)" build.log -A 5 -B 1 > failure_snippet.txt || tail -n 200 build.log > failure_snippet.txt
+          tail -n 250 build.log > failure_snippet.txt
           gh release delete "ci-debug" --yes || true
-          gh release create "ci-debug" failure_snippet.txt \
+          gh release create "ci-debug" build.log failure_snippet.txt \
             --title "CI Debug Failure" \
             --notes-file failure_snippet.txt
 

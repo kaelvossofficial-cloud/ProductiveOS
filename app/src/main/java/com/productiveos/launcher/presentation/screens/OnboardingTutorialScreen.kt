@@ -517,7 +517,7 @@ private fun PermissionCard(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = if (isGranted) "granted ✓" else "grant →",
+                    text = if (isGranted) "granted \u2713" else "grant \u2192",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = if (isGranted) palette.accentDot else palette.background
                 )

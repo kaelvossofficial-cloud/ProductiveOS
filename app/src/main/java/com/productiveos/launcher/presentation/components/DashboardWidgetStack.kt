@@ -244,7 +244,7 @@ fun DashboardCalendarCard(
                         color = palette.secondaryText
                     )
                     Text(
-                        text = "sync â†’",
+                        text = "sync \u2192",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = palette.accentPrimary
                     )
@@ -281,7 +281,7 @@ fun DashboardCalendarCard(
                 }
             } else {
                 Text(
-                    text = "no upcoming events today Â· tap to open calendar",
+                    text = "no upcoming events today \u00B7 tap to open calendar",
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
                     color = palette.mutedText
                 )
