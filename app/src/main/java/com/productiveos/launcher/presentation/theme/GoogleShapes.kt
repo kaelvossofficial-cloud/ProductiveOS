@@ -15,8 +15,10 @@ import kotlin.math.sin
 
 /**
  * Polar "lobed" shape: r(t) = 1 + amplitude * cos(lobes * (t - rotation)), blended with a
- * superellipse so square-ish silhouettes stay possible. This is how the Material-3-Expressive
- * style shapes (cookie, flower, clover, sunny, soft triangle) are produced without a polygon library.
+ * superellipse so square-ish silhouettes stay possible.
+ *
+ * Performance-optimized: Caches the generated [Outline] by pixel dimensions so scrolling
+ * lists and floating animations never recompute trigonometry on the UI thread.
  */
 class PolarLobeShape(
     private val lobes: Int,
@@ -24,10 +26,21 @@ class PolarLobeShape(
     private val rotationDeg: Float = 0f,
     private val squareness: Float = 2f
 ) : Shape {
+    private var cachedWidth: Int = -1
+    private var cachedHeight: Int = -1
+    private var cachedOutline: Outline? = null
+
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val w = size.width.toInt()
+        val h = size.height.toInt()
+        val existing = cachedOutline
+        if (existing != null && w == cachedWidth && h == cachedHeight) {
+            return existing
+        }
+
         val cx = size.width / 2f
         val cy = size.height / 2f
-        val steps = 220
+        val steps = 120
         val rot = (rotationDeg * PI / 180.0).toFloat()
         val path = Path()
         val ex = 2f / squareness
@@ -43,7 +56,11 @@ class PolarLobeShape(
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         path.close()
-        return Outline.Generic(path)
+        return Outline.Generic(path).also {
+            cachedWidth = w
+            cachedHeight = h
+            cachedOutline = it
+        }
     }
 }
 
@@ -63,4 +80,3 @@ enum class GoogleShape(val shape: Shape) {
         fun forKey(key: Int): GoogleShape = entries[abs(key) % entries.size]
     }
 }
-

@@ -1,11 +1,8 @@
 package com.productiveos.launcher.presentation.screens
 
-import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -57,6 +54,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.productiveos.launcher.data.local.AppEntity
@@ -71,6 +69,7 @@ import com.productiveos.launcher.presentation.components.SnappyEaseOut
 import com.productiveos.launcher.presentation.components.WaveSidebarScrubber
 import com.productiveos.launcher.presentation.components.rememberTilt
 import com.productiveos.launcher.presentation.theme.DoubleBezelSquircle
+import com.productiveos.launcher.presentation.theme.LiquidGlassCard
 import com.productiveos.launcher.presentation.theme.LocalProductiveOSPalette
 import com.productiveos.launcher.presentation.theme.SquircleShape
 import com.productiveos.launcher.presentation.theme.jellyPress
@@ -83,10 +82,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
-
-/** How long an empty patch of the home screen must be held before settings open. */
-private const val SETTINGS_HOLD_MS = 1100L
-private const val SETTINGS_HOLD_DELAY_MS = 280L
 
 @Composable
 fun ZenHomeScreen(
@@ -113,7 +108,8 @@ fun ZenHomeScreen(
     onCanvasSwipeRight: () -> Unit,
     onDoubleTapEmptySpace: () -> Unit,
     onLongPressEmptySpace: () -> Unit,
-    onHomeEdgeLetterSelected: (String) -> Unit = { onSwipeUpSearch() }
+    onHomeEdgeLetterSelected: (String) -> Unit = { onSwipeUpSearch() },
+    onOpenVolumeBar: () -> Unit = {}
 ) {
     val palette = LocalProductiveOSPalette.current
     val haptic = LocalHapticFeedback.current
@@ -160,14 +156,9 @@ fun ZenHomeScreen(
         TextAlignmentOption.RIGHT -> TextAlign.End
     }
 
-    // Per-frame interaction state. Only the *providers* are read by canvases, so none of this
-    // recomposes the screen while a finger is moving.
     var activeTouchPoint by remember { mutableStateOf<Offset?>(null) }
     val holdProgress = remember { mutableFloatStateOf(0f) }
     var holdingPackage by remember { mutableStateOf<String?>(null) }
-    val pullPx = remember { mutableFloatStateOf(0f) }
-    val settingsHold = remember { mutableFloatStateOf(0f) }
-    var settingsHoldPoint by remember { mutableStateOf(Offset.Zero) }
     val bloom = remember { Animatable(0f) }
     var bloomOrigin by remember { mutableStateOf(Offset.Zero) }
     var containerOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -181,10 +172,10 @@ fun ZenHomeScreen(
         bloomOrigin = center - containerOrigin
         scope.launch {
             bloom.snapTo(0f)
-            bloom.animateTo(1f, tween(540, easing = SnappyEaseOut))
+            bloom.animateTo(1f, tween(420, easing = SnappyEaseOut))
         }
         scope.launch {
-            delay(110L)
+            delay(80L)
             onAppClick(app)
         }
     }
@@ -194,7 +185,7 @@ fun ZenHomeScreen(
             .fillMaxSize()
             .background(palette.background)
             .onGloballyPositioned { containerOrigin = it.positionInWindow() }
-            // Observe touches without consuming them (feeds the grid + hold glows).
+            // Observe touches without consuming them (feeds the kinetic dot grid)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     while (true) {
@@ -206,42 +197,19 @@ fun ZenHomeScreen(
                     activeTouchPoint = null
                 }
             }
+            // Clean Double-Tap & Long-Press on empty space (no 16ms busy-loop, zero jank)
             .pointerInput(Unit) {
-                detectTapGestures(onDoubleTap = { onDoubleTapEmptySpace() })
-            }
-            // Hold an empty patch (longer than a normal long-press) to open settings, with a growing glow.
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val slop = viewConfiguration.touchSlop * 1.5f
-                    val start = SystemClock.uptimeMillis()
-                    var fired = false
-                    settingsHoldPoint = down.position
-                    while (true) {
-                        val event = withTimeoutOrNull(16L) { awaitPointerEvent() }
-                        val elapsed = SystemClock.uptimeMillis() - start
-                        if (event != null) {
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            if ((change.position - down.position).getDistance() > slop) break
-                        }
-                        if (holdingPackage != null) break
-                        val p = ((elapsed - SETTINGS_HOLD_DELAY_MS).toFloat() /
-                            (SETTINGS_HOLD_MS - SETTINGS_HOLD_DELAY_MS).toFloat()).coerceIn(0f, 1f)
-                        settingsHold.floatValue = p
-                        if (p >= 1f) {
-                            fired = true
-                            break
+                detectTapGestures(
+                    onDoubleTap = { onDoubleTapEmptySpace() },
+                    onLongPress = {
+                        if (holdingPackage == null) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLongPressEmptySpace()
                         }
                     }
-                    settingsHold.floatValue = 0f
-                    if (fired) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onLongPressEmptySpace()
-                    }
-                }
+                )
             }
-            // Velocity-tracked pull: the home content follows the finger, then springs open or back.
+            // Clean Vertical Swipe detector (never shrinks or distorts home layout)
             .pointerInput(settings.swipeDownForNotifications) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -249,7 +217,7 @@ fun ZenHomeScreen(
                     tracker.addPosition(down.uptimeMillis, down.position)
                     val slop = viewConfiguration.touchSlop
                     var dragging = false
-                    var total = 0f
+                    var totalDy = 0f
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -258,52 +226,44 @@ fun ZenHomeScreen(
                         val dy = change.position.y - down.position.y
                         val dx = change.position.x - down.position.x
                         if (!dragging) {
-                            if (abs(dx) > slop * 1.5f && abs(dx) > abs(dy)) break
-                            if (abs(dy) > slop && abs(dy) > abs(dx) * 1.2f && holdingPackage == null) {
+                            if (abs(dx) > slop * 1.4f && abs(dx) > abs(dy)) break
+                            if (abs(dy) > slop * 1.3f && abs(dy) > abs(dx) * 1.25f && holdingPackage == null) {
                                 dragging = true
                             }
                         }
                         if (dragging) {
-                            total = dy
-                            pullPx.floatValue = if (dy < 0f) -dy * 0.92f else 0f
+                            totalDy = dy
                             change.consume()
                         }
                     }
                     if (dragging) {
                         val velocityY = tracker.calculateVelocity().y
-                        val height = size.height.toFloat()
-                        if (total < 0f) {
-                            val shouldOpen = -total > height * 0.15f || velocityY < -1100f
-                            val startPull = pullPx.floatValue
-                            scope.launch {
-                                if (shouldOpen) {
-                                    animate(
-                                        initialValue = startPull,
-                                        targetValue = height * 0.5f,
-                                        animationSpec = tween(190, easing = SnappyEaseOut)
-                                    ) { value, _ -> pullPx.floatValue = value }
-                                    onSwipeUpSearch()
-                                    delay(320L)
-                                    pullPx.floatValue = 0f
-                                } else {
-                                    animate(
-                                        initialValue = startPull,
-                                        targetValue = 0f,
-                                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 360f)
-                                    ) { value, _ -> pullPx.floatValue = value }
-                                }
-                            }
-                        } else {
-                            pullPx.floatValue = 0f
-                            if (total > 70f && settings.swipeDownForNotifications) {
-                                onSwipeDownNotifications()
-                            }
+                        if (totalDy < -85f || velocityY < -950f) {
+                            onSwipeUpSearch()
+                        } else if ((totalDy > 85f || velocityY > 950f) && settings.swipeDownForNotifications) {
+                            onSwipeDownNotifications()
                         }
                     }
                 }
             }
     ) {
-        // Layer 0: kinetic grid, drifting with tilt
+        // Layer 0: Ambient top radial liquid glow + kinetic grid
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        palette.accentPrimary.copy(alpha = if (palette.isLight) 0.10f else 0.14f),
+                        palette.accentSecondary.copy(alpha = if (palette.isLight) 0.04f else 0.06f),
+                        Color.Transparent
+                    ),
+                    center = Offset(size.width * 0.5f, size.height * 0.14f),
+                    radius = size.minDimension * 0.72f
+                ),
+                radius = size.minDimension * 0.72f,
+                center = Offset(size.width * 0.5f, size.height * 0.14f)
+            )
+        }
+
         if (settings.showInteractiveGrid) {
             InteractiveGridCanvas(
                 touchProvider = { activeTouchPoint },
@@ -312,24 +272,15 @@ fun ZenHomeScreen(
             )
         }
 
-        // Layer 1: content that follows the pull gesture frame-by-frame
+        // Layer 1: Stable full-screen content (never shrinks or breaks)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    val p = pullPx.floatValue
-                    val norm = (p / (size.height * 0.5f)).coerceIn(0f, 1f)
-                    translationY = -p * 0.55f
-                    alpha = 1f - 0.85f * norm
-                    val s = 1f - 0.06f * norm
-                    scaleX = s
-                    scaleY = s
-                }
                 .padding(
-                    start = 28.dp,
-                    end = if (settings.showHomeEdgeSidebar) 34.dp else 28.dp,
-                    top = 24.dp,
-                    bottom = 24.dp
+                    start = 26.dp,
+                    end = if (settings.showHomeEdgeSidebar) 34.dp else 26.dp,
+                    top = 20.dp,
+                    bottom = 20.dp
                 ),
             horizontalAlignment = horizontalAlignment
         ) {
@@ -337,21 +288,22 @@ fun ZenHomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp),
+                    .padding(top = 12.dp),
                 horizontalAlignment = horizontalAlignment
             ) {
                 if (!isDefaultLauncher) {
-                    DoubleBezelSquircle(
-                        modifier = Modifier.padding(bottom = 20.dp),
-                        outerRadius = 20.dp,
-                        innerPaddingHorizontal = 16.dp,
-                        innerPaddingVertical = 9.dp,
+                    LiquidGlassCard(
+                        modifier = Modifier.padding(bottom = 16.dp),
+                        cornerRadius = 20.dp,
                         elevated = true,
+                        accentHighlight = true,
+                        paddingHorizontal = 16.dp,
+                        paddingVertical = 10.dp,
                         onClick = onSetDefaultLauncherClick
                     ) {
                         Text(
                             text = "Set ProductiveOS as Default Home →",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
                             color = palette.primaryText
                         )
                     }
@@ -370,7 +322,7 @@ fun ZenHomeScreen(
                 }
 
                 if (settings.showDate) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = dateFormatted.lowercase(),
                         style = MaterialTheme.typography.bodyLarge,
@@ -404,7 +356,7 @@ fun ZenHomeScreen(
                                     Text(
                                         text = if (m.isPlaying) "▶" else "❚❚",
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = palette.primaryText
+                                        color = palette.accentPrimary
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     val trackText = if (m.artist.isNotBlank()) "${m.title} · ${m.artist}".lowercase() else m.title.lowercase()
@@ -435,7 +387,7 @@ fun ZenHomeScreen(
                 }
 
                 if (settings.showTelemetry) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     DoubleBezelSquircle(
                         outerRadius = 20.dp,
                         innerPaddingHorizontal = 14.dp,
@@ -445,9 +397,9 @@ fun ZenHomeScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(6.dp)
+                                    .size(7.dp)
                                     .clip(CircleShape)
-                                    .background(palette.accentDot)
+                                    .background(palette.accentPrimary)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
@@ -470,7 +422,7 @@ fun ZenHomeScreen(
                                 .padding(top = 8.dp)
                                 .jellyPress(0.95f)
                                 .clip(RoundedCornerShape(50))
-                                .background(palette.surfaceElevated)
+                                .background(palette.glassSurfaceElevated)
                                 .clickable(onClick = onToggleFocusSound)
                                 .padding(horizontal = 14.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -478,7 +430,7 @@ fun ZenHomeScreen(
                             Text(
                                 text = "ılılı  focus anchor · ${activeFocusSound.label} · tap to stop",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = palette.primaryText
+                                color = palette.accentPrimary
                             )
                         }
                     }
@@ -503,7 +455,7 @@ fun ZenHomeScreen(
                             Text(
                                 text = "·",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = palette.mutedText
+                                color = palette.accentPrimary
                             )
                             Text(
                                 text = item.text.lowercase(),
@@ -516,20 +468,23 @@ fun ZenHomeScreen(
                 }
             }
 
-            // Middle: floating Google-shaped icons (or the classic text list)
+            // Middle: Responsive Floating Icons or Liquid Glass Text Rows
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             ) {
                 if (pinnedApps.isEmpty()) {
-                    DoubleBezelSquircle(
+                    LiquidGlassCard(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .fillMaxWidth(),
-                        outerRadius = 24.dp,
-                        innerPaddingHorizontal = 20.dp,
-                        innerPaddingVertical = 20.dp,
+                        cornerRadius = 24.dp,
+                        elevated = true,
+                        accentHighlight = true,
+                        paddingHorizontal = 20.dp,
+                        paddingVertical = 20.dp,
                         onClick = onSwipeUpSearch
                     ) {
                         Column(
@@ -537,7 +492,7 @@ fun ZenHomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "productiveos · zen space",
+                                text = "productiveos · liquid glass",
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = palette.primaryText
                             )
@@ -565,7 +520,7 @@ fun ZenHomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.Center),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalAlignment = horizontalAlignment
                     ) {
                         pinnedApps.take(6).forEach { app ->
@@ -593,7 +548,7 @@ fun ZenHomeScreen(
                                                     right = size.width * p,
                                                     bottom = size.height
                                                 ) {
-                                                    drawRect(palette.primaryText.copy(alpha = 0.12f))
+                                                    drawRect(palette.accentPrimary.copy(alpha = 0.18f))
                                                 }
                                             }
                                         }
@@ -623,9 +578,9 @@ fun ZenHomeScreen(
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Box(
                                                 modifier = Modifier
-                                                    .size(5.dp)
+                                                    .size(6.dp)
                                                     .clip(CircleShape)
-                                                    .background(palette.mutedText)
+                                                    .background(palette.accentPrimary)
                                             )
                                         }
                                     }
@@ -636,25 +591,27 @@ fun ZenHomeScreen(
                 }
             }
 
-            // Dock
+            // Bottom Liquid Glass Dock (with quick Voice Bar summon)
             if (settings.showIconDock) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp),
+                        .padding(bottom = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     DoubleBezelSquircle(
                         outerRadius = 24.dp,
-                        innerPaddingHorizontal = 18.dp,
-                        innerPaddingVertical = 10.dp
+                        innerPaddingHorizontal = 16.dp,
+                        innerPaddingVertical = 10.dp,
+                        elevated = true
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             val dockItems = listOf(
-                                "↑ search" to onSwipeUpSearch,
+                                "↑ apps" to onSwipeUpSearch,
+                                "ılı voice" to onOpenVolumeBar,
                                 "burner" to onOpenBurnerNote,
                                 "clips" to onOpenQuantumClip,
                                 "settings" to onLongPressEmptySpace
@@ -669,8 +626,10 @@ fun ZenHomeScreen(
                                 }
                                 Text(
                                     text = label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = palette.secondaryText,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (label == "ılı voice") FontWeight.Medium else FontWeight.Normal
+                                    ),
+                                    color = if (label == "ılı voice") palette.accentPrimary else palette.secondaryText,
                                     modifier = Modifier
                                         .jellyPress(0.95f)
                                         .clickable(onClick = action)
@@ -696,34 +655,17 @@ fun ZenHomeScreen(
             )
         }
 
-        // Magic overlays: settings-hold halo + launch bloom
+        // Launch bloom overlay
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val p = settingsHold.floatValue
-            if (p > 0.01f) {
-                val radius = 70.dp.toPx() + 110.dp.toPx() * p
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            palette.accentDot.copy(alpha = 0.5f * p),
-                            palette.primaryText.copy(alpha = 0.16f * p),
-                            Color.Transparent
-                        ),
-                        center = settingsHoldPoint,
-                        radius = radius
-                    ),
-                    radius = radius,
-                    center = settingsHoldPoint
-                )
-            }
             val b = bloom.value
             if (b > 0.005f && b < 0.999f) {
-                val radius = (size.maxDimension * 1.3f * b).coerceAtLeast(1f)
+                val radius = (size.maxDimension * 1.2f * b).coerceAtLeast(1f)
                 val fade = 1f - b
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            palette.accentDot.copy(alpha = 0.55f * fade),
-                            palette.primaryText.copy(alpha = 0.14f * fade),
+                            palette.accentPrimary.copy(alpha = 0.50f * fade),
+                            palette.accentSecondary.copy(alpha = 0.18f * fade),
                             Color.Transparent
                         ),
                         center = bloomOrigin,

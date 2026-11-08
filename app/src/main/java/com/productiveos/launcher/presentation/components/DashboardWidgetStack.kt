@@ -115,6 +115,7 @@ fun DashboardCalendarCard(
         }
     }
 
+    var hasCalendarPerm by remember { mutableStateOf(false) }
     var upcomingEvents by remember { mutableStateOf<List<RealCalendarEvent>>(emptyList()) }
 
     LaunchedEffect(Unit) {
@@ -123,6 +124,7 @@ fun DashboardCalendarCard(
                 context,
                 Manifest.permission.READ_CALENDAR
             ) == PackageManager.PERMISSION_GRANTED
+            hasCalendarPerm = hasPerm
             if (hasPerm) {
                 val now = System.currentTimeMillis()
                 val endOfDay = now + 24 * 3600_000L
@@ -224,8 +226,30 @@ fun DashboardCalendarCard(
                 }
             }
 
-            if (upcomingEvents.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+            if (!hasCalendarPerm) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(palette.surfaceElevated)
+                        .clickable { onOpenCalendar() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "connect google calendar for live events",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.secondaryText
+                    )
+                    Text(
+                        text = "sync â†’",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = palette.accentPrimary
+                    )
+                }
+            } else if (upcomingEvents.isNotEmpty()) {
                 Text(
                     text = "upcoming today",
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
@@ -255,6 +279,12 @@ fun DashboardCalendarCard(
                         )
                     }
                 }
+            } else {
+                Text(
+                    text = "no upcoming events today Â· tap to open calendar",
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                    color = palette.mutedText
+                )
             }
         }
     }

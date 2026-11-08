@@ -24,23 +24,40 @@ enum class TextAlignmentOption(val title: String) {
     RIGHT("Right")
 }
 
-enum class TypographyStyleOption(val title: String) {
-    CLEAN_SANS("Clean Sans"),
-    MONOSPACE_TERMINAL("Monospace Terminal"),
-    EDITORIAL_SERIF("Editorial Serif")
+enum class TypographyStyleOption(val title: String, val subtitle: String = "") {
+    CLEAN_SANS("Clean Sans", "Modern geometric sans-serif"),
+    MONOSPACE_TERMINAL("Monospace", "Precision technical code type"),
+    EDITORIAL_SERIF("Editorial Serif", "Classic book & magazine serif")
 }
 
-enum class LauncherThemeOption(val title: String, val hexLabel: String) {
-    OLED_BLACK("Pure OLED Black", "#000000"),
-    SLATE_GRAY("Slate Gray", "#121212"),
-    WARM_STONE("Warm Stone", "#F5F5F0"),
-    PALE_SAGE("Pale Sage", "#EAEFE9"),
-    TOKYO_MIST("Tokyo Mist", "#E9EEF3"),
-    OCHRE_SAND("Ochre Sand", "#F5EFE6"),
-    MIDNIGHT_NAVY("Midnight Navy", "#0B101B");
+enum class LauncherThemeOption(
+    val title: String,
+    val subtitle: String,
+    val hexLabel: String = ""
+) {
+    LIQUID_FROST("Liquid Frost", "Sapphire glass & cyan luminescence", "#070D19"),
+    AURORA_EMERALD("Aurora Emerald", "Forest obsidian & bioluminescent mint", "#06120E"),
+    COSMIC_VIOLET("Cosmic Amethyst", "Velvet space & neon lavender glass", "#0C0818"),
+    SUNSET_EMBER("Sunset Coral", "Warm obsidian & solar coral glow", "#160A08"),
+    OCEAN_ABYSS("Oceanic Cyan", "Abyssal teal & aqua pearl glass", "#051118"),
+    OLED_BLACK("Obsidian OLED", "Zero-power pitch black & ice rim", "#000000"),
+    MIDNIGHT_NAVY("Midnight Navy", "Deep slate blue & sky cobalt glass", "#0B101B"),
+    SLATE_GRAY("Carbon Slate", "Matte titanium & silver frost", "#121212"),
+    ROSE_QUARTZ("Rose Quartz", "Daylight blush pearl & berry glass", "#F9F1F4"),
+    WARM_STONE("Warm Stone", "Editorial parchment & bronze glass", "#F5F5F0"),
+    PALE_SAGE("Botanical Sage", "Daylight eucalyptus & jade glass", "#EAEFE9"),
+    TOKYO_MIST("Tokyo Mist", "Cool daylight mist & indigo glass", "#E9EEF3"),
+    OCHRE_SAND("Ochre Sand", "Desert dune & terracotta glass", "#F5EFE6");
 
     val isLight: Boolean
-        get() = this == WARM_STONE || this == PALE_SAGE || this == TOKYO_MIST || this == OCHRE_SAND
+        get() = this == ROSE_QUARTZ || this == WARM_STONE || this == PALE_SAGE || this == TOKYO_MIST || this == OCHRE_SAND
+}
+
+enum class VolumeBarStyleOption(val title: String, val subtitle: String) {
+    LIQUID_GLASS_PILL("Liquid Glass Capsule", "Frosted specular pill with glowing liquid fill"),
+    EQUALIZER_WAVE("Voice Equalizer Wave", "Dynamic 18-bar acoustic voice waveform"),
+    NEON_ORBIT_ARC("Neon Tactile Matrix", "Segmented glowing squircle cells with pulse"),
+    MINIMAL_EDGE_BLADE("Minimal Edge Blade", "Sleek glass rail with floating luminescence orb")
 }
 
 enum class IconColorMode(val label: String) {
@@ -53,7 +70,7 @@ data class FavoriteContact(val name: String, val number: String)
 data class LauncherSettings(
     val textAlignment: TextAlignmentOption = TextAlignmentOption.LEFT,
     val typographyStyle: TypographyStyleOption = TypographyStyleOption.CLEAN_SANS,
-    val themeOption: LauncherThemeOption = LauncherThemeOption.OLED_BLACK,
+    val themeOption: LauncherThemeOption = LauncherThemeOption.LIQUID_FROST,
     val fontScale: Float = 1.0f,
     val iconScale: Float = 1.0f,
     val iconColorMode: IconColorMode = IconColorMode.THEME_MONOCHROME,
@@ -87,7 +104,9 @@ data class LauncherSettings(
     val canvasSwipeLeftPkg: String = "",
     val canvasSwipeRightPkg: String = "",
     val burnerNoteText: String = "",
-    val burnerNoteUpdatedAt: Long = 0L
+    val burnerNoteUpdatedAt: Long = 0L,
+    val volumeBarStyle: VolumeBarStyleOption = VolumeBarStyleOption.LIQUID_GLASS_PILL,
+    val customVolumeBarEnabled: Boolean = true
 )
 
 @Singleton
@@ -132,6 +151,8 @@ class LauncherPreferencesRepository @Inject constructor(
         val CANVAS_SWIPE_RIGHT_PKG = stringPreferencesKey("canvas_swipe_right_pkg")
         val BURNER_NOTE_TEXT = stringPreferencesKey("burner_note_text")
         val BURNER_NOTE_UPDATED_AT = longPreferencesKey("burner_note_updated_at")
+        val VOLUME_BAR_STYLE = stringPreferencesKey("volume_bar_style")
+        val CUSTOM_VOLUME_BAR_ENABLED = booleanPreferencesKey("custom_volume_bar_enabled")
     }
 
     val settingsFlow: Flow<LauncherSettings> = context.dataStore.data.map { prefs ->
@@ -145,7 +166,11 @@ class LauncherPreferencesRepository @Inject constructor(
 
         val theme = prefs[Keys.THEME_OPTION]?.let {
             runCatching { LauncherThemeOption.valueOf(it) }.getOrNull()
-        } ?: LauncherThemeOption.OLED_BLACK
+        } ?: LauncherThemeOption.LIQUID_FROST
+
+        val volumeStyle = prefs[Keys.VOLUME_BAR_STYLE]?.let {
+            runCatching { VolumeBarStyleOption.valueOf(it) }.getOrNull()
+        } ?: VolumeBarStyleOption.LIQUID_GLASS_PILL
 
         val widgetIds = prefs[Keys.INSTALLED_WIDGET_IDS]?.let { raw ->
             raw.split(",")
@@ -189,7 +214,9 @@ class LauncherPreferencesRepository @Inject constructor(
             canvasSwipeLeftPkg = prefs[Keys.CANVAS_SWIPE_LEFT_PKG] ?: "",
             canvasSwipeRightPkg = prefs[Keys.CANVAS_SWIPE_RIGHT_PKG] ?: "",
             burnerNoteText = prefs[Keys.BURNER_NOTE_TEXT] ?: "",
-            burnerNoteUpdatedAt = prefs[Keys.BURNER_NOTE_UPDATED_AT] ?: 0L
+            burnerNoteUpdatedAt = prefs[Keys.BURNER_NOTE_UPDATED_AT] ?: 0L,
+            volumeBarStyle = volumeStyle,
+            customVolumeBarEnabled = prefs[Keys.CUSTOM_VOLUME_BAR_ENABLED] ?: true
         )
     }
 
@@ -205,19 +232,23 @@ class LauncherPreferencesRepository @Inject constructor(
         context.dataStore.edit { it[Keys.THEME_OPTION] = option.name }
     }
 
+    suspend fun setVolumeBarStyle(option: VolumeBarStyleOption) {
+        context.dataStore.edit { it[Keys.VOLUME_BAR_STYLE] = option.name }
+    }
+
+    suspend fun setCustomVolumeBarEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.CUSTOM_VOLUME_BAR_ENABLED] = enabled }
+    }
+
     suspend fun toggleQuickContrastTheme() {
         context.dataStore.edit { prefs ->
             val current = prefs[Keys.THEME_OPTION]?.let {
                 runCatching { LauncherThemeOption.valueOf(it) }.getOrNull()
-            } ?: LauncherThemeOption.OLED_BLACK
-            val next = when (current) {
-                LauncherThemeOption.OLED_BLACK -> LauncherThemeOption.WARM_STONE
-                LauncherThemeOption.SLATE_GRAY -> LauncherThemeOption.OLED_BLACK
-                LauncherThemeOption.WARM_STONE -> LauncherThemeOption.OLED_BLACK
-                LauncherThemeOption.PALE_SAGE -> LauncherThemeOption.OLED_BLACK
-                LauncherThemeOption.TOKYO_MIST -> LauncherThemeOption.OLED_BLACK
-                LauncherThemeOption.OCHRE_SAND -> LauncherThemeOption.OLED_BLACK
-                LauncherThemeOption.MIDNIGHT_NAVY -> LauncherThemeOption.WARM_STONE
+            } ?: LauncherThemeOption.LIQUID_FROST
+            val next = if (current.isLight) {
+                LauncherThemeOption.LIQUID_FROST
+            } else {
+                LauncherThemeOption.WARM_STONE
             }
             prefs[Keys.THEME_OPTION] = next.name
         }
@@ -268,6 +299,7 @@ class LauncherPreferencesRepository @Inject constructor(
             "showHomeEdgeSidebar" -> Keys.SHOW_HOME_EDGE_SIDEBAR
             "floatingHomeIcons" -> Keys.FLOATING_HOME_ICONS
             "drawerGridMode" -> Keys.DRAWER_GRID_MODE
+            "customVolumeBarEnabled" -> Keys.CUSTOM_VOLUME_BAR_ENABLED
             else -> return
         }
         context.dataStore.edit { it[key] = value }

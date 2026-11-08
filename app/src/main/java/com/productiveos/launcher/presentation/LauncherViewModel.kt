@@ -1,6 +1,7 @@
 package com.productiveos.launcher.presentation
 
 import android.content.Context
+import android.media.AudioManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.productiveos.launcher.data.local.AppEntity
@@ -11,15 +12,16 @@ import com.productiveos.launcher.data.preferences.LauncherSettings
 import com.productiveos.launcher.data.preferences.LauncherThemeOption
 import com.productiveos.launcher.data.preferences.TextAlignmentOption
 import com.productiveos.launcher.data.preferences.TypographyStyleOption
+import com.productiveos.launcher.data.preferences.VolumeBarStyleOption
 import com.productiveos.launcher.data.repository.AppRepository
 import com.productiveos.launcher.data.repository.DailyTelemetry
 import com.productiveos.launcher.data.repository.MicroOsRepository
+import com.productiveos.launcher.data.repository.ReportPeriod
+import com.productiveos.launcher.data.repository.UsageReportData
 import com.productiveos.launcher.data.repository.UsageStatsHelper
 import com.productiveos.launcher.data.repository.WeeklyAwarenessSummary
 import com.productiveos.launcher.data.repository.WhisperEngine
 import com.productiveos.launcher.data.repository.WhisperItem
-import com.productiveos.launcher.data.repository.ReportPeriod
-import com.productiveos.launcher.data.repository.UsageReportData
 import com.productiveos.launcher.data.service.ImportantNotificationData
 import com.productiveos.launcher.data.service.ProductiveNotificationListenerService
 import com.productiveos.launcher.util.FocusAudioGenerator
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 enum class PomodoroMode(val title: String, val durationMinutes: Int) {
     FOCUS_25("25m Focus", 25),
@@ -83,6 +86,9 @@ class LauncherViewModel @Inject constructor(
     private val focusAudioGenerator: FocusAudioGenerator
 ) : ViewModel() {
 
+    private val audioManager: AudioManager? =
+        appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
     private val _currentScreen = MutableStateFlow(LauncherScreen.ZEN_HOME)
     val currentScreen: StateFlow<LauncherScreen> = _currentScreen.asStateFlow()
 
@@ -122,6 +128,18 @@ class LauncherViewModel @Inject constructor(
     private val _pomodoroState = MutableStateFlow(PomodoroState())
     val pomodoroState: StateFlow<PomodoroState> = _pomodoroState.asStateFlow()
     private var pomodoroJob: Job? = null
+
+    // Custom Volume / Voice Bar State
+    private val _volumeFraction = MutableStateFlow(readCurrentSystemVolume())
+    val volumeFraction: StateFlow<Float> = _volumeFraction.asStateFlow()
+
+    private val _isVolumeMuted = MutableStateFlow(false)
+    val isVolumeMuted: StateFlow<Boolean> = _isVolumeMuted.asStateFlow()
+
+    private val _isVolumeBarVisible = MutableStateFlow(false)
+    val isVolumeBarVisible: StateFlow<Boolean> = _isVolumeBarVisible.asStateFlow()
+    private var volumeHideJob: Job? = null
+    private var lastNonZeroVolume: Float = 0.65f
 
     val importantNotifications: StateFlow<ImportantNotificationData> =
         ProductiveNotificationListenerService.notificationsFlow
@@ -172,7 +190,7 @@ class LauncherViewModel @Inject constructor(
             if (hour in 6..16) {
                 LauncherThemeOption.WARM_STONE
             } else {
-                LauncherThemeOption.OLED_BLACK
+                LauncherThemeOption.LIQUID_FROST
             }
         } else {
             settings.themeOption
@@ -180,7 +198,7 @@ class LauncherViewModel @Inject constructor(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = LauncherThemeOption.OLED_BLACK
+        initialValue = LauncherThemeOption.LIQUID_FROST
     )
 
     val visibleApps: StateFlow<List<AppEntity>> = appRepository.visibleAppsFlow
@@ -234,10 +252,97 @@ class LauncherViewModel @Inject constructor(
         refreshAllState()
     }
 
+    private fun readCurrentSystemVolume(): Float {
+        return runCatching {
+            val am = audioManager ?: return 0.65f
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(0, max)
+            (cur.toFloat() / max.toFloat()).coerceIn(0f, 1f)
+        }.getOrDefault(0.65f)
+    }
+
+    fun syncVolumeFromSystem() {
+        val current = readCurrentSystemVolume()
+        _volumeFraction.value = current
+        _isVolumeMuted.value = current <= 0.005f
+        if (current > 0.05f) lastNonZeroVolume = current
+    }
+
+    fun adjustVolumeByStep(direction: Int) {
+        runCatching {
+            val am = audioManager ?: return
+            val flag = 0 // Silent UI flag so our custom Liquid Glass Volume Bar renders instead of stock UI
+            am.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                flag
+            )
+        }
+        syncVolumeFromSystem()
+        showVolumeOverlayBriefly()
+    }
+
+    fun setSystemVolumeFraction(fraction: Float, triggerOverlay: Boolean = false) {
+        val clamped = fraction.coerceIn(0f, 1f)
+        _volumeFraction.value = clamped
+        _isVolumeMuted.value = clamped <= 0.005f
+        if (clamped > 0.05f) lastNonZeroVolume = clamped
+        runCatching {
+            val am = audioManager ?: return@runCatching
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            val targetIdx = (clamped * max).roundToInt().coerceIn(0, max)
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, targetIdx, 0)
+        }
+        if (triggerOverlay) {
+            showVolumeOverlayBriefly()
+        }
+    }
+
+    fun toggleSystemMute(triggerOverlay: Boolean = true) {
+        if (_isVolumeMuted.value || _volumeFraction.value <= 0.01f) {
+            setSystemVolumeFraction(lastNonZeroVolume.coerceAtLeast(0.35f), triggerOverlay)
+        } else {
+            lastNonZeroVolume = _volumeFraction.value
+            setSystemVolumeFraction(0f, triggerOverlay)
+        }
+    }
+
+    fun showVolumeOverlayBriefly() {
+        _isVolumeBarVisible.value = true
+        volumeHideJob?.cancel()
+        volumeHideJob = viewModelScope.launch {
+            delay(2_800L)
+            _isVolumeBarVisible.value = false
+        }
+    }
+
+    fun setVolumeBarStyle(style: VolumeBarStyleOption) {
+        viewModelScope.launch {
+            preferencesRepository.setVolumeBarStyle(style)
+        }
+    }
+
+    fun cycleVolumeBarStyle() {
+        val entries = VolumeBarStyleOption.entries
+        val current = settingsState.value.volumeBarStyle
+        val next = entries[(entries.indexOf(current) + 1) % entries.size]
+        setVolumeBarStyle(next)
+        showVolumeOverlayBriefly()
+    }
+
+    fun setCustomVolumeBarEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setCustomVolumeBarEnabled(enabled)
+        }
+    }
+
     fun refreshAllState() {
         viewModelScope.launch {
             runCatching {
                 _isDefaultLauncher.value = SystemLauncherHelper.isDefaultHomeLauncher(appContext)
+            }
+            runCatching {
+                syncVolumeFromSystem()
             }
             runCatching {
                 preferencesRepository.purgeExpiredBurnerNoteIfNeeded()
@@ -628,6 +733,13 @@ class LauncherViewModel @Inject constructor(
     fun completeOnboarding() {
         viewModelScope.launch {
             preferencesRepository.setHasCompletedOnboarding(true)
+        }
+    }
+
+    fun replayOnboarding() {
+        viewModelScope.launch {
+            preferencesRepository.setHasCompletedOnboarding(false)
+            _currentScreen.value = LauncherScreen.ZEN_HOME
         }
     }
 

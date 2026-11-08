@@ -158,6 +158,32 @@ object SystemLauncherHelper {
         searchWeb(context, "https://keep.google.com")
     }
 
+    fun createNewGoogleTask(context: Context) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_INSERT).apply {
+                type = "vnd.android.cursor.dir/event"
+                setPackage("com.google.android.apps.tasks")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            openGoogleTasksApp(context)
+        }
+    }
+
+    fun createNewGoogleKeepNote(context: Context) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                setPackage("com.google.android.keep")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            openGoogleKeepNotesApp(context)
+        }
+    }
+
     fun openCalendarApp(context: Context) {
         runCatching {
             val builder = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")

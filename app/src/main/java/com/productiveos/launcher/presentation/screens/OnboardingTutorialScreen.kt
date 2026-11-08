@@ -304,7 +304,57 @@ private fun OnboardingPermissionsStep(
             color = palette.secondaryText
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        val allGranted = isDefaultHome && hasUsageAccess && hasNotificationAccess && hasCalendarAccess
+        if (!allGranted) {
+            val nextAction = when {
+                !isDefaultHome -> onRequestDefaultHome
+                !hasUsageAccess -> onRequestUsageAccess
+                !hasNotificationAccess -> onRequestNotificationAccess
+                else -> onRequestCalendarAccess
+            }
+            val nextLabel = when {
+                !isDefaultHome -> "1. set default home launcher \u2192"
+                !hasUsageAccess -> "2. grant usage access \u2192"
+                !hasNotificationAccess -> "3. grant notifications \u2192"
+                else -> "4. sync google calendar \u2192"
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(palette.primaryText)
+                    .clickable { nextAction() }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "grant next: ",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = palette.background
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(palette.accentDot.copy(alpha = 0.16f))
+                    .border(1.dp, palette.accentDot, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "all system permissions granted \u2713",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = palette.accentDot
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PermissionCard(

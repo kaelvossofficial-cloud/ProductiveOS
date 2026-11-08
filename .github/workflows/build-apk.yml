@@ -78,7 +78,7 @@ jobs:
           else
             VER_NAME=$(grep 'versionName = ' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
             if [ -z "$VER_NAME" ]; then
-              VER_NAME="1.6.0"
+              VER_NAME="1.7.0"
             fi
             RELEASE_TAG="v${VER_NAME}"
           fi
@@ -100,43 +100,33 @@ jobs:
 
           ---
 
-          ### 🌟 What's New in v1.6.0 (Onboarding Ritual, All-in-One Permissions, Harmonized Icons & System Sync)
+          ### 🌟 What's New in v1.7.0 (Smart Monochrome Desaturation, Guided Permissions Workflow, Replay Ritual & Google System Sync)
 
-          - 🧭 **Seamless Onboarding Tutorial & All-in-One Permissions Interface**:
-            - Added an intentional multi-step onboarding tutorial on first launch introducing the ProductiveOS philosophy.
-            - **All-in-One Permissions Hub**: Request Default Home Launcher, Screen Time & Usage Access, Notification Access, and Google Calendar sync in one unified step with live status badges.
-            - **Zen Gestures Guide**: Visual reference cards for quick access to drawer, reports, widget gallery, 3s mindful hold, and double-tap to lock.
+          - 🎨 **Smart Monochrome Desaturation & Adaptive Icon Pipeline**:
+            - Legacy non-adaptive bitmap icons no longer turn into solid flat silhouette blocks; they now pass through an intelligent high-contrast monochrome ColorMatrix (\`setToSaturation(0f)\`) with clean contrast curves and a subtle translucent contour border.
+            - Adaptive icons automatically receive full monochrome palette harmonization (\`monochromeTint\`) with precision inner scaling (\`0.82f - 0.88f\`) that perfectly hugs Google geometric container shapes (Cookie, Flower, Clover, Sunny, Soft Triangle, Squircle, Pebble).
+            - Settings allows instant toggling between **Harmonized** and **Original App Colors**.
 
-          - 🎨 **Harmonized Monochrome Theme Icons & Google Squircle Shapes**:
-            - App icons dynamically tint to harmonize with the active OS theme (Warm Stone, Slate Gray, Pure OLED Black).
-            - Precision inner scaling ensures icons fit organically inside Google geometric shapes (Cookie, Flower, Clover, Sunny, Soft Triangle, Squircle, Pebble) without clipping.
-            - Added **Icon Color Mode** toggle in Settings to switch between Harmonized and Original App Colors anytime.
+          - 🧭 **Guided Sequential Permissions Flow in Onboarding**:
+            - Added an interactive guide banner in the Onboarding Permissions step that cycles sequentially through missing permissions (Default Launcher → Screen Time & Usage → Notification Access → Google Calendar Sync).
+            - Real-time confirmation badges show instant checkmarks as permissions are granted, concluding with an all-clear confirmation.
 
-          - 📐 **Centered Floating Safe Zone (Zero Overlap)**:
-            - Re-anchored home screen floating icon constellation to the safe central viewport.
-            - Constrained drift physics guarantee zero collision or overlap with clock, telemetry, or bottom search dock.
+          - 🔄 **Replay Onboarding Tutorial & Permissions Hub in Settings**:
+            - Added a dedicated card in Settings under **Vault & System** allowing users to replay the entire onboarding tutorial, refresh their gesture orientation, and audit all required permissions at any time.
 
-          - 📜 **Editorial List as App Drawer Default**:
-            - Set the clean Editorial List mode as the default drawer experience with sleek typography and shaped icons.
-            - Retained instant toggle to 4-column animated grid mode with edge scale physics.
+          - 📅 **Google System Integration & Action Shortcuts**:
+            - **Google Calendar**: Real-time agenda queries for upcoming events with automatic sync status banner prompting permission grant if not yet configured.
+            - **Google Tasks & Google Keep**: Direct 1-tap creation intents (\`createNewGoogleTask\`, \`createNewGoogleKeepNote\`) to immediately draft tasks and notes without launcher lag.
 
-          - 📅 **Real-Time Google Sync Widgets (Calendar, Tasks & Keep)**:
-            - **Google Calendar**: Real-time agenda queries for today's events with formatted start times.
-            - **Google Tasks & Google Keep**: 1-tap direct integration links embedded directly into the daily task card.
+          - ⚡ **120Hz Ultra-Smooth Fluid Physics & Zero Overlap Layout**:
+            - Constrained floating icon constellation to the safe center viewport with zero collision across status clock, system telemetry, and search dock.
+            - Optimized \`InteractiveGridCanvas\` dot matrix rendering (~55% fewer draw operations) and UI-rate sensor processing.
+            - High-performance LRU drawable cache (\`AppIconBitmapCache\`) eliminating IPC frame stutter.
 
-          - ⚙️ **Icon Customization & Size Adjuster**:
-            - Added an interactive Icon Scale slider (70% - 135%) in Launcher Settings.
-
-          - ⚡ **Performance & Lag Elimination (Buttery 120Hz)**:
-            - Implemented an LRU bitmap cache (\`AppIconBitmapCache\`) for app drawables, eliminating IPC latency and frame drops.
-            - Optimized interactive background grid to cut draw call overhead by ~55%.
-            - Switched tilt sensors to UI rate, preventing thread saturation.
-
-          - 🛡️ **Retained Features from Prior Versions**:
+          - 🛡️ **Retained Signature Features**:
             - Quick actions & direct WhatsApp / SMS messaging from the home screen.
-            - Interactive background dot/crosshair lattice grid.
-            - Micro-OS Utilities (Quantum Clip, Focus Anchor, Micro-Log, Burner Notes).
             - Mindful reports dashboard, widget gallery, and Pomodoro focus tracker.
+            - Double-tap to lock screen & 3-second mindful hold app launch delay.
 
           ---
 
